@@ -18,7 +18,6 @@ try:
     logging.info("Gemini API configured successfully.")
 except (ValueError, AttributeError) as e:
     logging.fatal(f"FATAL ERROR: Could not configure Gemini API. {e}")
-    # Don't exit - let the app start but fail gracefully on requests
 
 
 def score_paper_with_gemini(paper_file) -> str:
@@ -56,7 +55,7 @@ def score_paper_with_gemini(paper_file) -> str:
                 rubric_content = f.read()
 
             # Initialize model
-            model_name = 'gemini-2.5-pro'
+            model_name = 'gemini-2.5-flash'
             model = genai.GenerativeModel(model_name)
             logging.info(f"Initialized Gemini model: {model_name}")
 
@@ -69,16 +68,22 @@ def score_paper_with_gemini(paper_file) -> str:
             )
             logging.info(f"File uploaded successfully. Display name: {uploaded_file.display_name}")
 
-            # Construct the full prompt
-            full_prompt = [
-                prompt_instructions,
-                "\n--- START OF RUBRIC ---\n",
-                rubric_content,
-                "\n--- END OF RUBRIC ---\n",
-                "\n--- START OF PAPER TO EVALUATE ---\n",
-                uploaded_file,
-                "\n--- END OF PAPER TO EVALUATE ---\n"
-            ]
+            # Construct prompt more like the GUI experience - single text block + file
+            full_prompt_text = f"""{prompt_instructions}
+
+--- START OF RUBRIC (cobidas_rubric.csv) ---
+{rubric_content}
+--- END OF RUBRIC ---
+
+IMPORTANT REMINDER: Your output MUST be a CSV with exactly these 7 columns:
+Question_Number,Status,Section,Question_Text,Maximum_Score,ai_score,evidence
+
+Every row MUST have ai_score (number or "N/A") and evidence (quoted text or "Information not found.").
+Do NOT output anything except the CSV data. No explanations, no markdown code fences.
+
+Now analyze the attached PDF paper and output the complete scored CSV:"""
+
+            full_prompt = [full_prompt_text, uploaded_file]
 
             # Call Gemini API
             logging.info("Sending request to Gemini API. This may take a few minutes...")
@@ -102,8 +107,22 @@ def score_paper_with_gemini(paper_file) -> str:
                 if cleaned_text.endswith("```"):
                     cleaned_text = cleaned_text[:-3]
                 
+                cleaned_text = cleaned_text.strip()
+                
+                # Debug logging - show what we got
+                logging.info(f"Raw CSV response (first 500 chars): {cleaned_text[:500]}")
+                logging.info(f"Raw CSV response (last 300 chars): {cleaned_text[-300:]}")
+                
+                # Validate that we have the required columns
+                first_line = cleaned_text.split('\n')[0] if cleaned_text else ""
+                logging.info(f"CSV header row: {first_line}")
+                
+                if 'ai_score' not in first_line or 'evidence' not in first_line:
+                    logging.error(f"Missing required columns! Header: {first_line}")
+                    raise ValueError(f"Gemini response missing required columns. Got header: {first_line}")
+                
                 logging.info("Successfully extracted and cleaned response text.")
-                return cleaned_text.strip()
+                return cleaned_text
             else:
                 # Handle blocked or empty response
                 finish_reason = "UNKNOWN"
