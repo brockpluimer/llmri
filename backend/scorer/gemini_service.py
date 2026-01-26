@@ -56,7 +56,7 @@ def score_paper_with_gemini(paper_file) -> str:
                 rubric_content = f.read()
 
             # Initialize model
-            model_name = 'gemini-2.5-flash'
+            model_name = 'gemini-2.5-pro'
             model = genai.GenerativeModel(model_name)
             logging.info(f"Initialized Gemini model: {model_name}")
 
