@@ -1,0 +1,83 @@
+﻿Question_Number,Status,Section,Question_Text,Maximum_Score
+1,Mandatory,Experimental Design Reporting,Are the subjects who participated and were analyzed described?,2
+2,Mandatory,Experimental Design Reporting,"Is the age (mean, standard deviation, and range) of subjects provided?",2
+3,Mandatory,Experimental Design Reporting,Is the sex/gender distribution (counts or frequencies) of subjects provided?,2
+4,Mandatory,Experimental Design Reporting,Are the education level and/or socioeconomic status (SES) of subjects described?,1
+5,Mandatory,Experimental Design Reporting,Is the handedness of subjects reported?,1
+6,Mandatory,Experimental Design Reporting,Are the exclusion criteria for subject participation stated?,2
+7,Mandatory,Experimental Design Reporting,Are the clinical criteria for subject inclusion/grouping described?,2
+8,Mandatory,Experimental Design Reporting,Is the target population and the recruitment strategy described?,2
+9,Mandatory,Experimental Design Reporting,"Is it stated that ethical approval was obtained (e.g., from an IRB or ethics committee)?",2
+10,Mandatory,Experimental Design Reporting,Is it stated that informed consent was obtained from participants?,2
+11,Mandatory,Acquisition Reporting,Is the MRI scanner manufacturer and model specified?,1
+12,Mandatory,Acquisition Reporting,"Is the type of head coil used specified? (eg., 32-channel head coil)",1
+13,Mandatory,Acquisition Reporting,"Is the type of pulse sequence used described (e.g., echo-planar, spin echo, GRE, SE)?",2
+14,Mandatory,Acquisition Reporting,"Is the imaging type specified (e.g., fMRI, dMRI, structural)?",2
+15,Mandatory,Acquisition Reporting,"Are the essential sequence and imaging parameters (e.g., TR, TE, flip angle, FOV, matrix size, voxel size) reported?",2
+16,Mandatory,Acquisition Reporting,Is the phase encoding direction reported?,1
+17,Mandatory,Acquisition Reporting,"Is the slice acquisition order (e.g., sequential, interleaved) and timing reported?",1
+18,Mandatory,Acquisition Reporting,"Is the extent of brain coverage described (e.g., whole-brain, partial coverage)?",1
+19,Mandatory,Acquisition Reporting,"Were procedures used to ensure T1 stabilization (e.g., dummy scans), and are they described?",1
+20,Mandatory,Preprocessing Reporting,Is the primary software package(s) used for preprocessing named?,2
+21,Mandatory,Preprocessing Reporting,Is the method used for brain extraction (skull stripping) described?,1
+22,Mandatory,Preprocessing Reporting,Is the tissue segmentation method described?,1
+23,Mandatory,Preprocessing Reporting,Is the method used for motion correction described?,2
+24,Mandatory,Preprocessing Reporting,Is the method for coregistering functional and structural images within subjects described?,2
+25,Mandatory,Preprocessing Reporting,Is the method used for intersubject registration (normalization to a template/atlas) described?,2
+26,Mandatory,Statistical Modeling & Inference,"Is the specific data (e.g., BOLD signal, FA values, connectivity) submitted to statistical modeling clearly defined?",2
+27,Mandatory,Statistical Modeling & Inference,"Is the spatial domain of the analysis specified (e.g., whole-brain, ROI-based)?",2
+28,Mandatory,Statistical Modeling & Inference,"Are the independent variables (predictors, regressors) included in the statistical model clearly stated? (e.g. adding a covariate)",2
+29,Mandatory,Statistical Modeling & Inference,"Is the type of statistical model used specified (e.g., GLM, mixed-effects)?",2
+30,Mandatory,Statistical Modeling & Inference,Are relevant settings or assumptions of the statistical model described?,1
+31,Mandatory,Statistical Modeling & Inference,"Is the specific contrast or effect being tested clearly defined? (e.g. pre/post, across-task, rest versus active, etc.)",2
+32,Mandatory,Statistical Modeling & Inference,"Is the type of statistic used for inference reported (e.g., T-statistic, F-statistic)?",1
+33,Mandatory,Statistical Modeling & Inference,"Is the method for computing p-values described (e.g., parametric, permutation)?",1
+34,Mandatory,Statistical Modeling & Inference,"Is the dependent variable specifically defined for the analysis method (e.g., connectivity matrix, pattern vector)?",1
+35,Mandatory,Results Reporting,Are the main effects or hypotheses tested clearly summarized?,1
+36,Mandatory,Results Reporting,Are unthresholded statistical maps made available?,2
+37,Mandatory,Results Reporting,Are the actual extracted data values from ROIs reported or made available?,1
+38,Mandatory,Results Reporting,"Are relevant spatial features of the results described (e.g., cluster size, peak location)?",1
+39,Conditional,Experimental Design Reporting,"If used, are the specific clinical instruments used (e.g., questionnaires, scales) named?",2
+40,Conditional,Experimental Design Reporting,"If groups were matched, is the matching strategy described?",2
+41,Conditional,Experimental Design Reporting,"If neurocognitive measures are used, are they described?",2
+42,Conditional,Acquisition Reporting,Were any special accommodations made for participants during scanning described?,1
+43,Conditional,Acquisition Reporting,"If conditional shimming procedures are used, are they described?",1
+44,Conditional,Acquisition Reporting,"If parallel imaging was used, are the method and acceleration factor reported?",1
+45,Conditional,Acquisition Reporting,"If multiband/simultaneous multi-slice imaging was used, are the parameters (e.g., acceleration factor) reported?",1
+46,Conditional,Acquisition Reporting,"Was a fat suppression method used, and if so, is it described?",1
+47,Conditional,Acquisition Reporting,"Was any preprocessing performed on the scanner console, and if so, is it described?",1
+48,Conditional,Acquisition Reporting,"For ASL MRI, are the specific acquisition details reported?",1
+49,Conditional,Acquisition Reporting,"For DSC MRI, are the specific acquisition details reported?",1
+50,Conditional,Acquisition Reporting,"Was motion monitoring performed during the scan, and if so, how?",1
+51,Conditional,Preprocessing Reporting,Were any post-acquisition steps taken regarding T1 stabilization effects described?,1
+52,Conditional,Preprocessing Reporting,Is the method used for slice timing correction described?,1
+53,Conditional,Preprocessing Reporting,"If gradient distortion correction was applied, is the method described?",1
+54,Conditional,Preprocessing Reporting,"For dMRI, is the method used for eddy current correction described?",1
+55,Conditional,Preprocessing Reporting,"For dMRI, is the model or method used for diffusion estimation described (e.g., DTI, HARDI)?",1
+56,Conditional,Preprocessing Reporting,"For dMRI, if tractography was performed, are the algorithm and parameters described?",1
+57,Conditional,Preprocessing Reporting,"If susceptibility or other distortion corrections were applied, is the method described?",1
+58,Conditional,Preprocessing Reporting,"Were any intensity correction or normalization steps applied, and are they described?",1
+59,Conditional,Preprocessing Reporting,"Are methods used to remove artifacts or structured noise (e.g., physiological noise) described if calculating functional connectivity or FaLFF?",1
+60,Conditional,Preprocessing Reporting,"If volume censoring/scrubbing was performed, are the criteria and method described?",1
+61,Conditional,Preprocessing Reporting,"For rs-fMRI, is the specific feature analyzed (e.g., ALFF, ReHo, functional connectivity) defined?",1
+62,Conditional,Preprocessing Reporting,Is the spatial smoothing kernel size (FWHM) and method reported?,2
+63,Conditional,Statistical Modeling & Inference,"Is the method used to correct for multiple comparisons described, including the threshold used?",2
+64,Conditional,Statistical Modeling & Inference,"If ICA was used, are the method and parameters described?",2
+65,Conditional,Statistical Modeling & Inference,Is the specific measure or model used for functional connectivity described?,2
+66,Conditional,Statistical Modeling & Inference,"If effective connectivity was modeled, is the method described?",2
+67,Conditional,Statistical Modeling & Inference,"If graph theory analysis was performed, are the methods (node/edge definition, metrics) described?",2
+68,Conditional,Statistical Modeling & Inference,"If multivariate modeling or predictive analysis was used, is the overall approach described?",2
+69,Conditional,Statistical Modeling & Inference,Are the methods for feature extraction and/or dimension reduction described?,2
+70,Conditional,Statistical Modeling & Inference,"Is the specific predictive model/algorithm used described (e.g., SVM, regression)?",2
+71,Conditional,Statistical Modeling & Inference,"Is the learning method described (e.g., supervised, unsupervised)?",1
+72,Conditional,Statistical Modeling & Inference,"Is the procedure for training the model described (e.g., cross-validation scheme)?",2
+73,Conditional,Statistical Modeling & Inference,"Are the evaluation metrics for discrete responses (e.g., accuracy, sensitivity, specificity) reported?",2
+74,Conditional,Statistical Modeling & Inference,"Are the evaluation metrics for continuous responses (e.g., correlation, R-squared) reported?",2
+75,Conditional,Statistical Modeling & Inference,"If RSA was performed, are the evaluation metrics reported?",2
+76,Conditional,Data Sharing,"If data are shared, is the specific material being shared (e.g., raw data, processed data, code) clearly stated?",2
+77,Conditional,Data Sharing,"If data are shared, is a URL or other specific access information provided for shared materials?",2
+78,Conditional,Data Sharing,"If data are shared, are statements regarding ethics compliance related to data sharing included?",1
+79,Conditional,Data Sharing,"If data are shared, is the format of the shared data described?",1
+80,Conditional,Reproducibility,"If essential for replication purposes, is information about the computational infrastructure used (if relevant) provided?",1
+81,Conditional,Preprocessing Reporting,"For ASL, are the specific preprocessing steps (e.g., quantification) described?",1
+82,Conditional,Preprocessing Reporting,"For DSC MRI, are the specific preprocessing steps (e.g., conversion to concentration) described?",1
