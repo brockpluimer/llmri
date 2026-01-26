@@ -16,7 +16,7 @@ ALLOWED_EXTENSIONS = {'pdf'}
 # Simple in-memory rate limiting (use Redis in production)
 rate_limit_store = {}
 RATE_LIMIT_WINDOW = 24 * 60 * 60  # 24 hours in seconds
-MAX_REQUESTS_PER_WINDOW = 1
+MAX_REQUESTS_PER_WINDOW = 9999
 
 
 def get_client_ip():
