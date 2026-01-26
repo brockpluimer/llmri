@@ -48,7 +48,10 @@ document.addEventListener('DOMContentLoaded', () => {
         countAll: document.getElementById('count-all'),
         countIssues: document.getElementById('count-issues'),
         countNa: document.getElementById('count-na'),
-        filterButtons: document.querySelectorAll('.filter-button')
+        filterButtons: document.querySelectorAll('.filter-button'),
+        
+        // Paper info (will be created dynamically)
+        paperInfo: document.getElementById('paper-info')
     };
 
     // ==========================================================================
@@ -57,12 +60,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let state = {
         file: null,
         results: null,
+        metadata: null,
+        filename: null,
         currentFilter: 'all'
     };
 
     // ==========================================================================
     // Constants
     // ==========================================================================
+    const STORAGE_KEY = 'llmri-saved-results';
+    
     const SECTION_COLORS = {
         'Experimental Design Reporting': '#4285F4',
         'Acquisition Reporting': '#34a853',
@@ -82,6 +89,54 @@ document.addEventListener('DOMContentLoaded', () => {
         'Data Sharing',
         'Reproducibility'
     ];
+
+    // ==========================================================================
+    // LocalStorage Persistence
+    // ==========================================================================
+    function saveResultsToStorage() {
+        if (state.results) {
+            const dataToSave = {
+                results: state.results,
+                metadata: state.metadata,
+                filename: state.filename,
+                savedAt: new Date().toISOString()
+            };
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+                console.log('Results saved to localStorage');
+            } catch (e) {
+                console.warn('Could not save to localStorage:', e);
+            }
+        }
+    }
+
+    function loadResultsFromStorage() {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                const data = JSON.parse(saved);
+                // Check if data is less than 24 hours old
+                const savedAt = new Date(data.savedAt);
+                const now = new Date();
+                const hoursSinceSave = (now - savedAt) / (1000 * 60 * 60);
+                
+                if (hoursSinceSave < 24 && data.results && data.results.length > 0) {
+                    return data;
+                } else {
+                    // Clear stale data
+                    localStorage.removeItem(STORAGE_KEY);
+                }
+            }
+        } catch (e) {
+            console.warn('Could not load from localStorage:', e);
+        }
+        return null;
+    }
+
+    function clearSavedResults() {
+        localStorage.removeItem(STORAGE_KEY);
+        console.log('Cleared saved results');
+    }
 
     // ==========================================================================
     // Theme Management
@@ -251,6 +306,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 await new Promise(resolve => setTimeout(resolve, 500));
                 
                 state.results = result.data;
+                state.metadata = result.metadata || null;
+                state.filename = result.filename || state.file?.name;
+                
+                // Save to localStorage
+                saveResultsToStorage();
+                
                 showResults();
             } else {
                 throw new Error(result.error || 'Unknown error occurred');
@@ -293,6 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.processing.classList.add('hidden');
         elements.resultsSection.classList.remove('hidden');
 
+        renderPaperInfo();
         renderScoreOverview();
         renderSectionBars();
         renderDetailedResults();
@@ -310,12 +372,62 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reset state
         clearFile();
         state.results = null;
+        state.metadata = null;
+        state.filename = null;
         state.currentFilter = 'all';
+        
+        // Clear saved results
+        clearSavedResults();
         
         // Reset filter buttons
         elements.filterButtons.forEach(btn => {
             btn.classList.toggle('active', btn.dataset.filter === 'all');
         });
+        
+        // Remove paper info if it exists
+        const existingPaperInfo = document.getElementById('paper-info');
+        if (existingPaperInfo) {
+            existingPaperInfo.remove();
+        }
+    }
+
+    function renderPaperInfo() {
+        // Remove existing paper info
+        const existingPaperInfo = document.getElementById('paper-info');
+        if (existingPaperInfo) {
+            existingPaperInfo.remove();
+        }
+        
+        // Create paper info section
+        const paperInfoDiv = document.createElement('div');
+        paperInfoDiv.id = 'paper-info';
+        paperInfoDiv.className = 'paper-info';
+        
+        let title = 'Analyzed Paper';
+        let subtitle = state.filename || 'Unknown file';
+        
+        if (state.metadata) {
+            if (state.metadata.title) {
+                title = state.metadata.title;
+            }
+            if (state.metadata.authors || state.metadata.year) {
+                const parts = [];
+                if (state.metadata.authors) parts.push(state.metadata.authors);
+                if (state.metadata.year) parts.push(`(${state.metadata.year})`);
+                subtitle = parts.join(' ');
+            }
+        }
+        
+        paperInfoDiv.innerHTML = `
+            <h2 class="paper-title">${escapeHtml(title)}</h2>
+            <p class="paper-subtitle">${escapeHtml(subtitle)}</p>
+        `;
+        
+        // Insert after results-nav
+        const resultsNav = document.querySelector('.results-nav');
+        if (resultsNav) {
+            resultsNav.after(paperInfoDiv);
+        }
     }
 
     function renderScoreOverview() {
@@ -349,16 +461,19 @@ document.addEventListener('DOMContentLoaded', () => {
         let maxScore = 0;
 
         state.results.forEach(item => {
-            const aiScore = item.ai_score;
-            if (aiScore !== 'N/A') {
-                const score = parseFloat(aiScore);
-                const max = parseFloat(item.Maximum_Score);
-                if (!isNaN(score)) totalScore += score;
-                if (!isNaN(max)) maxScore += max;
+            if (item.ai_score === 'N/A') return;
+
+            const score = parseFloat(item.ai_score);
+            const max = parseFloat(item.Maximum_Score);
+
+            if (!isNaN(score) && !isNaN(max)) {
+                totalScore += score;
+                maxScore += max;
             }
         });
 
         const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+
         return { totalScore, maxScore, percentage };
     }
 
@@ -375,27 +490,29 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.ai_score !== 'N/A') {
                 const score = parseFloat(item.ai_score);
                 const max = parseFloat(item.Maximum_Score);
-                if (!isNaN(score)) sectionScores[section].earned += score;
-                if (!isNaN(max)) sectionScores[section].possible += max;
+                if (!isNaN(score) && !isNaN(max)) {
+                    sectionScores[section].earned += score;
+                    sectionScores[section].possible += max;
+                }
             }
         });
 
         // Render bars
         elements.sectionBars.innerHTML = SECTIONS_ORDER
-            .filter(section => sectionScores[section]?.possible > 0)
+            .filter(section => sectionScores[section])
             .map(section => {
-                const data = sectionScores[section];
-                const percentage = Math.round((data.earned / data.possible) * 100);
+                const { earned, possible } = sectionScores[section];
+                const percent = possible > 0 ? Math.round((earned / possible) * 100) : 0;
                 const color = SECTION_COLORS[section] || '#4285F4';
 
                 return `
                     <div class="section-bar">
                         <div class="section-bar-header">
                             <span class="section-bar-name">${section}</span>
-                            <span class="section-bar-percent">${percentage}%</span>
+                            <span class="section-bar-percent">${percent}%</span>
                         </div>
                         <div class="section-bar-track">
-                            <div class="section-bar-fill" style="width: ${percentage}%; background-color: ${color};"></div>
+                            <div class="section-bar-fill" style="width: ${percent}%; background-color: ${color};"></div>
                         </div>
                     </div>
                 `;
@@ -404,19 +521,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderDetailedResults() {
         const filteredResults = filterResults(state.results, state.currentFilter);
-        const grouped = groupBySection(filteredResults);
+        const groupedResults = groupResultsBySection(filteredResults);
 
         elements.resultsAccordion.innerHTML = SECTIONS_ORDER
-            .filter(section => grouped[section]?.length > 0)
-            .map(section => {
-                const items = grouped[section];
+            .filter(section => groupedResults[section])
+            .map((section, index) => {
+                const items = groupedResults[section];
                 const color = SECTION_COLORS[section] || '#4285F4';
+                const isOpen = index === 0;
 
                 return `
-                    <div class="accordion-section">
+                    <div class="accordion-section ${isOpen ? 'open' : ''}">
                         <button class="accordion-header" onclick="this.parentElement.classList.toggle('open')">
                             <div class="accordion-header-left">
-                                <div class="accordion-dot" style="background-color: ${color};"></div>
+                                <span class="accordion-dot" style="background-color: ${color};"></span>
                                 <span class="accordion-title">${section}</span>
                                 <span class="accordion-count">(${items.length} items)</span>
                             </div>
@@ -425,43 +543,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             </svg>
                         </button>
                         <div class="accordion-content">
-                            ${items.map((item, index) => renderResultItem(item, index)).join('')}
+                            ${items.map(item => renderResultItem(item)).join('')}
                         </div>
                     </div>
                 `;
             }).join('');
-    }
-
-    function renderResultItem(item, index) {
-        const scoreClass = getScoreClass(item.ai_score, item.Maximum_Score);
-        const scoreDisplay = item.ai_score === 'N/A' ? 'N/A' : `${item.ai_score}/${item.Maximum_Score}`;
-
-        return `
-            <div class="result-item" style="animation-delay: ${index * 30}ms;">
-                <div class="result-item-header">
-                    <span class="result-item-number">Q${item.Question_Number}</span>
-                    <span class="result-item-score ${scoreClass}">${scoreDisplay}</span>
-                </div>
-                <p class="result-item-question">${item.Question_Text}</p>
-                <div class="result-item-evidence">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10"/>
-                        <line x1="12" y1="16" x2="12" y2="12"/>
-                        <line x1="12" y1="8" x2="12.01" y2="8"/>
-                    </svg>
-                    <p>${escapeHtml(item.evidence || 'No evidence provided.')}</p>
-                </div>
-            </div>
-        `;
-    }
-
-    function getScoreClass(aiScore, maxScore) {
-        if (aiScore === 'N/A') return 'result-item-score--na';
-        const score = parseFloat(aiScore);
-        const max = parseFloat(maxScore);
-        if (score === max) return 'result-item-score--full';
-        if (score === 0) return 'result-item-score--zero';
-        return 'result-item-score--partial';
     }
 
     function filterResults(results, filter) {
@@ -478,14 +564,50 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function groupBySection(results) {
-        const grouped = {};
-        results.forEach(item => {
+    function groupResultsBySection(results) {
+        return results.reduce((acc, item) => {
             const section = item.Section;
-            if (!grouped[section]) grouped[section] = [];
-            grouped[section].push(item);
-        });
-        return grouped;
+            if (!acc[section]) acc[section] = [];
+            acc[section].push(item);
+            return acc;
+        }, {});
+    }
+
+    function renderResultItem(item) {
+        const scoreClass = getScoreClass(item);
+        const scoreDisplay = item.ai_score === 'N/A' 
+            ? 'N/A' 
+            : `${item.ai_score}/${item.Maximum_Score}`;
+
+        return `
+            <div class="result-item">
+                <div class="result-item-header">
+                    <span class="result-item-number">Q${item.Question_Number}</span>
+                    <span class="result-item-score ${scoreClass}">${scoreDisplay}</span>
+                </div>
+                <p class="result-item-question">${escapeHtml(item.Question_Text)}</p>
+                <div class="result-item-evidence">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    <p>${escapeHtml(item.evidence || 'No evidence provided.')}</p>
+                </div>
+            </div>
+        `;
+    }
+
+    function getScoreClass(item) {
+        if (item.ai_score === 'N/A') return 'result-item-score--na';
+        
+        const score = parseFloat(item.ai_score);
+        const max = parseFloat(item.Maximum_Score);
+        
+        if (score === max) return 'result-item-score--full';
+        if (score === 0) return 'result-item-score--zero';
+        return 'result-item-score--partial';
     }
 
     function updateFilterCounts() {
@@ -531,7 +653,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `${state.file?.name.replace('.pdf', '') || 'paper'}_llmri_assessment.csv`;
+        link.download = `${state.filename?.replace('.pdf', '') || 'paper'}_llmri_assessment.csv`;
         link.click();
     }
 
@@ -539,20 +661,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!state.results) return;
 
         const { totalScore, maxScore, percentage } = calculateTotalScore();
-        const fileName = state.file?.name || 'paper.pdf';
+        const fileName = state.filename || 'paper.pdf';
+        
+        // Get paper title/authors for report
+        let paperTitle = fileName;
+        let paperAuthors = '';
+        if (state.metadata) {
+            if (state.metadata.title) paperTitle = state.metadata.title;
+            if (state.metadata.authors) {
+                paperAuthors = state.metadata.authors;
+                if (state.metadata.year) paperAuthors += ` (${state.metadata.year})`;
+            }
+        }
 
         const reportHTML = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>LLMRI Assessment Report - ${fileName}</title>
+    <title>LLMRI Assessment Report - ${escapeHtml(paperTitle)}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 900px; margin: 0 auto; padding: 40px 20px; background: #f8f9fa; color: #202124; }
         .header { background: linear-gradient(135deg, #4285F4 0%, #5e9eff 100%); color: white; padding: 40px; border-radius: 12px; margin-bottom: 30px; }
         .header h1 { font-size: 24px; margin-bottom: 8px; }
-        .header p { opacity: 0.9; font-size: 14px; }
+        .header .paper-title { font-size: 18px; opacity: 0.95; margin-bottom: 4px; }
+        .header .paper-authors { font-size: 14px; opacity: 0.85; }
+        .header p { opacity: 0.9; font-size: 14px; margin-top: 12px; }
         .score-card { background: white; padding: 30px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; }
         .score-big { font-size: 64px; font-weight: bold; color: ${percentage >= 60 ? '#34a853' : percentage >= 40 ? '#fbbc04' : '#ea4335'}; }
         .score-detail { color: #5f6368; margin-top: 8px; }
@@ -570,12 +705,19 @@ document.addEventListener('DOMContentLoaded', () => {
         .score-na { background: #f1f3f4; color: #80868b; }
         .evidence { font-size: 13px; color: #5f6368; font-style: italic; margin-top: 8px; padding: 12px; background: #f8f9fa; border-radius: 6px; }
         .footer { text-align: center; margin-top: 40px; color: #80868b; font-size: 12px; }
+        .disclaimer { background: #fff3cd; border: 1px solid #ffc107; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; color: #856404; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>LLMRI Assessment Report</h1>
-        <p>${fileName} • Generated ${new Date().toLocaleDateString()}</p>
+        ${paperTitle !== fileName ? `<div class="paper-title">${escapeHtml(paperTitle)}</div>` : ''}
+        ${paperAuthors ? `<div class="paper-authors">${escapeHtml(paperAuthors)}</div>` : ''}
+        <p>${escapeHtml(fileName)} • Generated ${new Date().toLocaleDateString()}</p>
+    </div>
+    
+    <div class="disclaimer">
+        ⚠️ Note: AI-generated assessments may vary slightly between analyses. This report should be used as a guide, not a definitive evaluation.
     </div>
     
     <div class="score-card">
@@ -682,6 +824,15 @@ document.addEventListener('DOMContentLoaded', () => {
         initTheme();
         initDragAndDrop();
         initEventListeners();
+        
+        // Check for saved results
+        const savedData = loadResultsFromStorage();
+        if (savedData) {
+            state.results = savedData.results;
+            state.metadata = savedData.metadata;
+            state.filename = savedData.filename;
+            showResults();
+        }
     }
 
     init();

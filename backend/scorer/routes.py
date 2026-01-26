@@ -16,7 +16,7 @@ ALLOWED_EXTENSIONS = {'pdf'}
 # Simple in-memory rate limiting (use Redis in production)
 rate_limit_store = {}
 RATE_LIMIT_WINDOW = 24 * 60 * 60  # 24 hours in seconds
-MAX_REQUESTS_PER_WINDOW = 9999
+MAX_REQUESTS_PER_WINDOW = 9999  # Set to 1 for production
 
 
 def get_client_ip():
@@ -115,16 +115,21 @@ def handle_score_paper():
         filename = secure_filename(paper_file.filename)
         logging.info(f"Processing file: {filename}")
         
-        # Call Gemini API for scoring
-        raw_csv_response = score_paper_with_gemini(paper_file)
+        # Call Gemini API for scoring - now returns dict with metadata and csv
+        gemini_response = score_paper_with_gemini(paper_file)
+        
+        # Extract metadata and CSV
+        metadata = gemini_response.get('metadata', {})
+        raw_csv = gemini_response.get('csv', '')
         
         # Parse CSV response to JSON
-        json_results = parse_gemini_csv_to_json(raw_csv_response)
+        json_results = parse_gemini_csv_to_json(raw_csv)
         
         logging.info("Successfully scored paper and parsed results.")
         return jsonify({
             "success": True, 
             "data": json_results,
+            "metadata": metadata,
             "filename": filename
         })
 

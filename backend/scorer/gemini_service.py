@@ -2,6 +2,7 @@ import os
 import pathlib
 import logging
 import tempfile
+import json
 import google.generativeai as genai
 
 logging.basicConfig(
@@ -20,7 +21,7 @@ except (ValueError, AttributeError) as e:
     logging.fatal(f"FATAL ERROR: Could not configure Gemini API. {e}")
 
 
-def score_paper_with_gemini(paper_file) -> str:
+def score_paper_with_gemini(paper_file) -> dict:
     """
     Sends a paper to Gemini for COBIDAS scoring.
     
@@ -28,7 +29,7 @@ def score_paper_with_gemini(paper_file) -> str:
         paper_file: A Flask FileStorage object containing the uploaded PDF.
         
     Returns:
-        A CSV-formatted string with the scoring results.
+        A dict with 'metadata' (title, authors, year) and 'csv' (scoring results).
         
     Raises:
         ValueError: If the API returns an empty or blocked response.
@@ -55,7 +56,7 @@ def score_paper_with_gemini(paper_file) -> str:
                 rubric_content = f.read()
 
             # Initialize model
-            model_name = 'gemini-2.5-flash'
+            model_name = 'gemini-2.5-pro'
             model = genai.GenerativeModel(model_name)
             logging.info(f"Initialized Gemini model: {model_name}")
 
@@ -68,20 +69,33 @@ def score_paper_with_gemini(paper_file) -> str:
             )
             logging.info(f"File uploaded successfully. Display name: {uploaded_file.display_name}")
 
-            # Construct prompt more like the GUI experience - single text block + file
+            # Construct prompt - single text block + file
             full_prompt_text = f"""{prompt_instructions}
 
 --- START OF RUBRIC (cobidas_rubric.csv) ---
 {rubric_content}
 --- END OF RUBRIC ---
 
-IMPORTANT REMINDER: Your output MUST be a CSV with exactly these 7 columns:
-Question_Number,Status,Section,Question_Text,Maximum_Score,ai_score,evidence
+IMPORTANT: Your response must be in the following JSON format:
+{{
+  "metadata": {{
+    "title": "The full title of the paper",
+    "authors": "First Author, Second Author, Third Author, et al.",
+    "year": "2024"
+  }},
+  "csv": "Question_Number,Status,Section,Question_Text,Maximum_Score,ai_score,evidence
+1,Mandatory,\\"Experimental Design Reporting\\",\\"Question text here\\",2,2,\\"Evidence here\\"
+..."
+}}
 
-Every row MUST have ai_score (number or "N/A") and evidence (quoted text or "Information not found.").
-Do NOT output anything except the CSV data. No explanations, no markdown code fences.
+CRITICAL REQUIREMENTS:
+1. Extract the paper's title, authors (abbreviated with et al. if more than 3), and publication year
+2. The "csv" field must contain the complete CSV with all 82 rubric items scored
+3. Every CSV row MUST have ai_score (number or "N/A") and evidence columns
+4. Output ONLY valid JSON - no markdown, no code fences, no extra text
+5. Escape quotes properly in the CSV string (use \\" for quotes within the JSON string)
 
-Now analyze the attached PDF paper and output the complete scored CSV:"""
+Now analyze the attached PDF paper and output the JSON response:"""
 
             full_prompt = [full_prompt_text, uploaded_file]
 
@@ -100,8 +114,8 @@ Now analyze the attached PDF paper and output the complete scored CSV:"""
                 cleaned_text = raw_text.strip()
                 
                 # Remove markdown code fences if present
-                if cleaned_text.startswith("```csv"):
-                    cleaned_text = cleaned_text[6:]
+                if cleaned_text.startswith("```json"):
+                    cleaned_text = cleaned_text[7:]
                 elif cleaned_text.startswith("```"):
                     cleaned_text = cleaned_text[3:]
                 if cleaned_text.endswith("```"):
@@ -109,20 +123,48 @@ Now analyze the attached PDF paper and output the complete scored CSV:"""
                 
                 cleaned_text = cleaned_text.strip()
                 
-                # Debug logging - show what we got
-                logging.info(f"Raw CSV response (first 500 chars): {cleaned_text[:500]}")
-                logging.info(f"Raw CSV response (last 300 chars): {cleaned_text[-300:]}")
+                # Debug logging
+                logging.info(f"Raw response (first 500 chars): {cleaned_text[:500]}")
                 
-                # Validate that we have the required columns
-                first_line = cleaned_text.split('\n')[0] if cleaned_text else ""
-                logging.info(f"CSV header row: {first_line}")
+                # Try to parse as JSON
+                try:
+                    result = json.loads(cleaned_text)
+                    
+                    # Validate structure
+                    if 'metadata' not in result or 'csv' not in result:
+                        raise ValueError("Response missing 'metadata' or 'csv' fields")
+                    
+                    csv_content = result['csv']
+                    
+                    # Validate CSV has required columns
+                    first_line = csv_content.split('\n')[0] if csv_content else ""
+                    if 'ai_score' not in first_line or 'evidence' not in first_line:
+                        logging.error(f"Missing required columns! Header: {first_line}")
+                        raise ValueError(f"CSV missing required columns. Got header: {first_line}")
+                    
+                    logging.info(f"Metadata extracted: {result['metadata']}")
+                    logging.info(f"CSV header: {first_line}")
+                    logging.info("Successfully extracted metadata and CSV.")
+                    
+                    return result
+                    
+                except json.JSONDecodeError as e:
+                    # Fallback: treat entire response as CSV (backwards compatibility)
+                    logging.warning(f"Could not parse as JSON, falling back to CSV-only mode: {e}")
+                    
+                    # Check if it looks like a CSV
+                    if 'Question_Number' in cleaned_text and 'ai_score' in cleaned_text:
+                        return {
+                            'metadata': {
+                                'title': None,
+                                'authors': None,
+                                'year': None
+                            },
+                            'csv': cleaned_text
+                        }
+                    else:
+                        raise ValueError(f"Response is neither valid JSON nor CSV: {cleaned_text[:200]}")
                 
-                if 'ai_score' not in first_line or 'evidence' not in first_line:
-                    logging.error(f"Missing required columns! Header: {first_line}")
-                    raise ValueError(f"Gemini response missing required columns. Got header: {first_line}")
-                
-                logging.info("Successfully extracted and cleaned response text.")
-                return cleaned_text
             else:
                 # Handle blocked or empty response
                 finish_reason = "UNKNOWN"

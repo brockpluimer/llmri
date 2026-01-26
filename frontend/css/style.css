@@ -911,6 +911,32 @@ input {
     color: var(--color-accent);
 }
 
+/* --------------------------------------------------------------------------
+   Paper Info
+   -------------------------------------------------------------------------- */
+.paper-info {
+    margin-bottom: var(--space-lg);
+    padding: var(--space-lg);
+    border-radius: var(--radius-xl);
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    text-align: center;
+}
+
+.paper-title {
+    font-family: var(--font-serif);
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-xs);
+    line-height: 1.4;
+}
+
+.paper-subtitle {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+}
+
 .score-label {
     font-size: 11px;
     color: var(--color-text-muted);
