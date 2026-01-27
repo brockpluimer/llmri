@@ -3,7 +3,7 @@
 import logging
 from .gemini_service import get_gemini_response, process_pdf_for_gemini
 from .utils import extract_metadata_from_response
-import google.genai as genai # Use the new library name
+import google.generativeai as genai
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
