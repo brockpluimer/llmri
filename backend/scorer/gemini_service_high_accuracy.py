@@ -173,6 +173,14 @@ def score_paper_high_accuracy(paper_file) -> dict:
         try:
             # === 1. SETUP ===
             temp_path = os.path.join(temp_dir, paper_file.filename)
+            
+            # Reset file pointer if it was consumed elsewhere
+            try:
+                paper_file.stream.seek(0)
+            except (AttributeError, ValueError):
+                # If seeking fails, the file might be closed or unseekable
+                pass
+            
             paper_file.save(temp_path)
 
             current_dir = pathlib.Path(__file__).parent.parent
