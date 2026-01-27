@@ -1,8 +1,13 @@
 """
 gemini_service_high_accuracy.py
 
-High-accuracy mode: Runs analysis multiple times and uses majority vote
-to resolve disagreements. More expensive but more consistent results.
+ULTRA HIGH-ACCURACY MODE
+- 7 independent passes with varied temperatures (0.0, 0.05, 0.1, 0.15, 0.1, 0.05, 0.0)
+- Gemini 2.5 Pro for maximum accuracy
+- Strict majority voting (need 4/7 agreement)
+- For any remaining ties, runs targeted tie-breakers until resolved
+
+Philosophy: Cost doesn't matter, accuracy does.
 """
 
 import os
@@ -15,278 +20,177 @@ import io
 from collections import Counter
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
-from pypdf import PdfReader
+
+# Reuse logic from main service
+from .gemini_service import load_rubric_map, reconstruct_full_csv, extract_text_from_pdf
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-# Configure Gemini API
-try:
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY environment variable not found.")
-    genai.configure(api_key=api_key)
-except Exception as e:
-    logging.fatal(f"FATAL ERROR: Could not configure Gemini API. {e}")
+# === CONFIGURATION ===
+NUM_PASSES = 7
+TEMPERATURES = [0.0, 0.05, 0.1, 0.15, 0.1, 0.05, 0.0]  # Symmetric, peaks at middle
+MAJORITY_THRESHOLD = 4  # Need 4/7 to agree
+MODEL_NAME = 'gemini-2.5-pro'
 
 
-def extract_text_from_pdf(pdf_path: str) -> str:
-    """Fallback: Extract text if Gemini blocks PDF."""
-    try:
-        reader = PdfReader(pdf_path)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
-        return text
-    except Exception as e:
-        logging.error(f"Failed to extract text from PDF: {e}")
-        return ""
-
-
-def load_rubric_map(rubric_path):
-    """Load rubric CSV into dictionary for reconstruction."""
-    rubric_map = {}
-    try:
-        with open(rubric_path, "r", encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                q_id = row.get('Question_Number', '').strip()
-                if q_id:
-                    rubric_map[q_id] = {
-                        'Status': row.get('Status', 'Mandatory'),
-                        'Section': row.get('Section', 'Unknown Section'),
-                        'Question_Text': row.get('Question_Text', 'Unknown Question'),
-                        'Maximum_Score': row.get('Maximum_Score', '0')
-                    }
-    except Exception as e:
-        logging.error(f"Failed to load rubric file: {e}")
-    return rubric_map
-
-
-def get_model():
-    """Initialize Gemini model with strict settings."""
+def get_model(temperature: float):
+    """Create model with specific temperature."""
     generation_config = {
-        "temperature": 0.0,
-        "top_k": 1,
+        "temperature": temperature,
+        "top_k": 40 if temperature > 0 else 1,
         "response_mime_type": "application/json",
     }
-    
+
     safety_settings = {
         HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
         HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
         HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
         HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
     }
-    
+
     return genai.GenerativeModel(
-        model_name='gemini-2.5-pro',
+        model_name=MODEL_NAME,
         generation_config=generation_config,
         safety_settings=safety_settings
     )
 
 
-def parse_ai_response(response_text: str) -> dict:
-    """Parse JSON response from Gemini."""
-    cleaned = response_text.strip()
-    if cleaned.startswith("```json"):
-        cleaned = cleaned[7:]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]
-    return json.loads(cleaned.strip())
+def generate_json_response(model, prompt_parts):
+    """Executes a single model run and returns parsed JSON."""
+    try:
+        response = model.generate_content(
+            prompt_parts,
+            request_options={"timeout": 600}
+        )
+        if not response.parts:
+            feedback = response.prompt_feedback
+            raise ValueError(f"Empty response (Safety Block): {feedback}")
+
+        cleaned = response.text.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+
+        return json.loads(cleaned.strip())
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON parse failed: {e}")
+        return None
+    except Exception as e:
+        logging.error(f"Generation failed: {e}")
+        return None
 
 
-def parse_csv_to_dict(csv_text: str) -> dict:
-    """Convert CSV string to dict keyed by Question_Number."""
-    results = {}
+def parse_ai_csv_to_dict(csv_text: str) -> dict:
+    """
+    Parses the 'Skinny CSV' from AI into a dictionary.
+    Returns: { '1': {'ai_score': '2', 'evidence': '...'}, ... }
+    """
+    scores = {}
+    if not csv_text:
+        return scores
+
     try:
         reader = csv.DictReader(io.StringIO(csv_text))
         for row in reader:
-            q_num = None
             clean_row = {k.strip().lower(): v for k, v in row.items() if k}
-            
-            for key in clean_row:
-                if 'question' in key or 'number' in key:
-                    q_num = clean_row[key]
+
+            # Extract Question ID
+            q_id = None
+            for k in clean_row:
+                if 'question' in k or 'number' in k:
+                    q_id = clean_row[k]
                     break
-            
-            if not q_num and row:
-                q_num = list(row.values())[0]
-            
-            if q_num:
-                q_num = str(q_num).strip()
+
+            if not q_id and row:
+                q_id = list(row.values())[0]
+
+            if q_id:
+                q_id = str(q_id).strip()
+
                 score = 'N/A'
                 evidence = ''
-                
                 for k, v in clean_row.items():
                     if 'score' in k and 'max' not in k:
                         score = v
                     if 'evidence' in k:
                         evidence = v
-                
-                results[q_num] = {'ai_score': score, 'evidence': evidence}
+
+                scores[q_id] = {
+                    'ai_score': str(score).strip(),
+                    'evidence': evidence
+                }
     except Exception as e:
-        logging.error(f"Failed to parse CSV: {e}")
-    return results
+        logging.error(f"Error parsing CSV: {e}")
+
+    return scores
 
 
-def run_single_analysis(model, prompt_text, uploaded_file=None, paper_text=None) -> dict:
-    """Run a single analysis pass."""
-    if uploaded_file:
-        prompt_payload = [prompt_text, uploaded_file]
-    else:
-        prompt_payload = [f"{prompt_text}\n\n--- PAPER TEXT ---\n{paper_text}"]
-    
-    response = model.generate_content(
-        prompt_payload,
-        request_options={"timeout": 600}
-    )
-    
-    if not response.parts:
-        raise ValueError(f"Gemini blocked request: {response.prompt_feedback}")
-    
-    return parse_ai_response(response.text)
+def normalize_score(score: str) -> str:
+    """Normalize score for comparison."""
+    s = str(score).strip().upper()
+    if s in ['N/A', 'NA', 'MISSING', '', 'NONE']:
+        return 'N/A'
+    try:
+        f = float(s)
+        # Round to 1 decimal to handle floating point issues
+        f = round(f, 1)
+        if f == int(f):
+            return str(int(f))
+        return str(f)
+    except ValueError:
+        return s
 
 
-def run_targeted_analysis(model, prompt_text, questions: list, uploaded_file=None, paper_text=None) -> dict:
-    """Run analysis on specific questions only."""
-    targeted_prompt = f"""{prompt_text}
-
-IMPORTANT: Only score these specific questions: {', '.join(questions)}
-Skip all other questions in the rubric.
-"""
+def get_majority_vote(votes: list) -> tuple:
+    """
+    Get majority vote from list of scores.
+    Returns: (winning_score, vote_count, is_majority)
+    """
+    if not votes:
+        return ('N/A', 0, False)
     
-    if uploaded_file:
-        prompt_payload = [targeted_prompt, uploaded_file]
-    else:
-        prompt_payload = [f"{targeted_prompt}\n\n--- PAPER TEXT ---\n{paper_text}"]
+    # Filter out MISSING votes
+    valid_votes = [v for v in votes if v != 'MISSING']
+    if not valid_votes:
+        return ('N/A', 0, False)
     
-    response = model.generate_content(
-        prompt_payload,
-        request_options={"timeout": 600}
-    )
-    
-    if not response.parts:
-        raise ValueError(f"Gemini blocked request: {response.prompt_feedback}")
-    
-    return parse_ai_response(response.text)
-
-
-def find_disagreements(results_list: list) -> list:
-    """Find question numbers where results disagree."""
-    if not results_list:
-        return []
-    
-    all_questions = set()
-    for r in results_list:
-        all_questions.update(r.keys())
-    
-    disagreements = []
-    for q in all_questions:
-        scores = [r.get(q, {}).get('ai_score', 'MISSING') for r in results_list]
-        # Normalize scores for comparison
-        normalized = [str(s).strip().upper() for s in scores]
-        if len(set(normalized)) > 1:
-            disagreements.append(q)
-    
-    return disagreements
-
-
-def get_majority_vote(results_list: list, question: str) -> dict:
-    """Get majority vote for a specific question."""
-    scores = []
-    evidences = {}
-    
-    for r in results_list:
-        if question in r:
-            score = str(r[question].get('ai_score', 'N/A')).strip()
-            scores.append(score)
-            evidences[score] = r[question].get('evidence', '')
-    
-    if not scores:
-        return {'ai_score': 'N/A', 'evidence': 'No consensus reached.'}
-    
-    # Find most common score
-    counter = Counter(scores)
+    counter = Counter(valid_votes)
     winner, count = counter.most_common(1)[0]
+    is_majority = count >= MAJORITY_THRESHOLD
     
-    return {'ai_score': winner, 'evidence': evidences.get(winner, '')}
-
-
-def merge_results_with_majority(all_runs: list, rubric_map: dict) -> dict:
-    """Merge all runs using majority vote for each question."""
-    final_scores = {}
-    
-    all_questions = set()
-    for run in all_runs:
-        all_questions.update(run.keys())
-    
-    for q in all_questions:
-        final_scores[q] = get_majority_vote(all_runs, q)
-    
-    return final_scores
-
-
-def reconstruct_full_csv(final_scores: dict, rubric_map: dict, metadata: dict) -> dict:
-    """Reconstruct full CSV from final scores."""
-    output_io = io.StringIO()
-    headers = ['Question_Number', 'Status', 'Section', 'Question_Text', 'Maximum_Score', 'ai_score', 'evidence']
-    writer = csv.DictWriter(output_io, fieldnames=headers)
-    writer.writeheader()
-    
-    for q_num, static_data in rubric_map.items():
-        score_data = final_scores.get(q_num, {'ai_score': 'N/A', 'evidence': 'Not scored.'})
-        
-        merged_row = {
-            'Question_Number': q_num,
-            'Status': static_data['Status'],
-            'Section': static_data['Section'],
-            'Question_Text': static_data['Question_Text'],
-            'Maximum_Score': static_data['Maximum_Score'],
-            'ai_score': score_data['ai_score'],
-            'evidence': score_data['evidence']
-        }
-        writer.writerow(merged_row)
-    
-    return {
-        'metadata': metadata,
-        'csv': output_io.getvalue()
-    }
+    return (winner, count, is_majority)
 
 
 def score_paper_high_accuracy(paper_file) -> dict:
     """
-    High-accuracy scoring with majority vote.
-    
-    Strategy:
-    1. Run twice
-    2. If disagreements, run 3rd time on disputed questions
-    3. Continue until majority (3/5) or max 5 runs
+    Ultra high-accuracy scoring with 7 passes and majority voting.
     """
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
-            # Save uploaded file
+            # === 1. SETUP ===
             temp_path = os.path.join(temp_dir, paper_file.filename)
             paper_file.save(temp_path)
-            
-            # Load resources
+
             current_dir = pathlib.Path(__file__).parent.parent
             rubric_path = current_dir / "rubrics" / "cobidas_rubric.csv"
-            
+
             with open(current_dir / "prompts" / "gemini_prompt.md", "r") as f:
                 prompt_instructions = f.read()
             with open(rubric_path, "r", encoding="utf-8") as f:
                 rubric_content = f.read()
-            
+
             rubric_map = load_rubric_map(rubric_path)
             if not rubric_map:
                 raise ValueError("Rubric failed to load.")
-            
-            model = get_model()
-            
-            # Build prompt
-            full_prompt = f"""{prompt_instructions}
+
+            logging.info(f"=== HIGH-ACCURACY MODE: {NUM_PASSES} passes with {MODEL_NAME} ===")
+
+            # === 2. BUILD BASE PROMPT ===
+            base_prompt = f"""{prompt_instructions}
 
 --- START OF RUBRIC (cobidas_rubric.csv) ---
 {rubric_content}
@@ -294,6 +198,7 @@ def score_paper_high_accuracy(paper_file) -> dict:
 
 IMPORTANT: Return the result strictly as JSON.
 The 'csv' string must ONLY contain 3 columns: Question_Number, ai_score, evidence.
+Do NOT repeat the Question Text or Section names.
 
 Format:
 {{
@@ -302,81 +207,211 @@ Format:
     "authors": "Author Names",
     "year": "2024"
   }},
-  "csv": "Question_Number,ai_score,evidence\\n1,2,\\"Quote...\\"\\n2,0,\\"Information not found.\\""
+  "csv": "Question_Number,ai_score,evidence\\n1,2,\\"Quote...\\"\\n2,0.5,\\"Evidence...\\""
 }}
 """
-            
-            # Try PDF upload first
+
+            # === 3. UPLOAD FILE ONCE ===
+            logging.info("Uploading PDF to Gemini...")
             uploaded_file = None
             paper_text = None
-            
+
             try:
-                logging.info("Uploading PDF to Gemini...")
                 uploaded_file = genai.upload_file(path=temp_path, mime_type='application/pdf')
+                logging.info("PDF uploaded successfully")
             except Exception as e:
-                logging.warning(f"PDF upload failed, using text extraction: {e}")
+                logging.warning(f"PDF upload failed ({e}), using text extraction")
                 paper_text = extract_text_from_pdf(temp_path)
                 if not paper_text:
                     raise ValueError("Could not extract text from PDF.")
-            
-            # === MAJORITY VOTE LOGIC ===
-            all_runs = []
+
+            # === 4. RUN ALL PASSES ===
+            all_scores = []  # List of dicts, one per pass
             metadata = {}
-            
-            # Run 1
-            logging.info("High-accuracy mode: Run 1/5...")
-            result1 = run_single_analysis(model, full_prompt, uploaded_file, paper_text)
-            metadata = result1.get('metadata', {})
-            run1_scores = parse_csv_to_dict(result1.get('csv', ''))
-            all_runs.append(run1_scores)
-            
-            # Run 2
-            logging.info("High-accuracy mode: Run 2/5...")
-            result2 = run_single_analysis(model, full_prompt, uploaded_file, paper_text)
-            run2_scores = parse_csv_to_dict(result2.get('csv', ''))
-            all_runs.append(run2_scores)
-            
-            # Check for disagreements
-            disagreements = find_disagreements(all_runs)
-            logging.info(f"Disagreements after 2 runs: {len(disagreements)} questions")
-            
-            # Runs 3-5: Only if needed, only on disputed questions
-            run_num = 3
-            while disagreements and run_num <= 5:
-                logging.info(f"High-accuracy mode: Run {run_num}/5 on {len(disagreements)} disputed questions...")
-                
-                try:
-                    result_n = run_targeted_analysis(
-                        model, full_prompt, disagreements, uploaded_file, paper_text
-                    )
-                    run_n_scores = parse_csv_to_dict(result_n.get('csv', ''))
+
+            for i in range(NUM_PASSES):
+                temp = TEMPERATURES[i] if i < len(TEMPERATURES) else 0.1
+                logging.info(f"Pass {i+1}/{NUM_PASSES} (temperature={temp})...")
+
+                model = get_model(temp)
+
+                if uploaded_file:
+                    prompt_content = [base_prompt, uploaded_file]
+                else:
+                    prompt_content = [f"{base_prompt}\n\n--- PAPER TEXT ---\n{paper_text}"]
+
+                result = generate_json_response(model, prompt_content)
+
+                if result:
+                    if i == 0:
+                        metadata = result.get('metadata', {})
                     
-                    # Merge targeted results into a full dict (other questions unchanged)
-                    full_run = {}
-                    for q in rubric_map.keys():
-                        if q in run_n_scores:
-                            full_run[q] = run_n_scores[q]
-                        elif all_runs:
-                            # Use previous consensus for non-disputed
-                            full_run[q] = get_majority_vote(all_runs, q)
-                    
-                    all_runs.append(full_run)
-                    
-                except Exception as e:
-                    logging.warning(f"Run {run_num} failed: {e}")
+                    scores = parse_ai_csv_to_dict(result.get('csv', ''))
+                    all_scores.append(scores)
+                    logging.info(f"  Pass {i+1} complete: {len(scores)} questions scored")
+                else:
+                    logging.warning(f"  Pass {i+1} FAILED - will use other passes")
+                    all_scores.append({})  # Empty dict for failed pass
+
+            successful_passes = sum(1 for s in all_scores if s)
+            logging.info(f"Completed {successful_passes}/{NUM_PASSES} successful passes")
+
+            if successful_passes < 3:
+                raise ValueError(f"Too many passes failed ({NUM_PASSES - successful_passes}/{NUM_PASSES}). Cannot establish consensus.")
+
+            # === 5. INITIAL MAJORITY VOTE ===
+            logging.info("Computing initial majority vote...")
+            
+            final_scores = {}
+            unresolved = []
+
+            for q_id in rubric_map.keys():
+                votes = []
+                evidences = {}
+
+                for pass_scores in all_scores:
+                    if pass_scores and q_id in pass_scores:
+                        score = normalize_score(pass_scores[q_id]['ai_score'])
+                        votes.append(score)
+                        if score not in evidences:
+                            evidences[score] = pass_scores[q_id]['evidence']
+
+                winner, count, is_majority = get_majority_vote(votes)
+
+                if is_majority:
+                    final_scores[q_id] = {
+                        'ai_score': winner,
+                        'evidence': evidences.get(winner, ''),
+                        'confidence': f"{count}/{len(votes)}"
+                    }
+                else:
+                    unresolved.append({
+                        'q_id': q_id,
+                        'votes': votes,
+                        'evidences': evidences
+                    })
+
+            logging.info(f"Initial vote: {len(final_scores)} resolved, {len(unresolved)} unresolved")
+
+            # === 6. TARGETED TIE-BREAKERS FOR UNRESOLVED ===
+            if unresolved:
+                logging.info(f"Running targeted tie-breakers for {len(unresolved)} questions...")
                 
-                # Recalculate disagreements
-                disagreements = find_disagreements(all_runs)
-                logging.info(f"Remaining disagreements: {len(disagreements)}")
+                unresolved_ids = [u['q_id'] for u in unresolved]
                 
-                run_num += 1
+                # Run 3 more targeted passes at different temperatures
+                tie_breaker_temps = [0.0, 0.1, 0.0]
+                
+                for tb_round, temp in enumerate(tie_breaker_temps):
+                    if not unresolved_ids:
+                        break
+                        
+                    logging.info(f"  Tie-breaker round {tb_round + 1}/3 (temp={temp}) for {len(unresolved_ids)} questions...")
+                    
+                    model = get_model(temp)
+                    
+                    # Build focused prompt
+                    disputed_str = ', '.join(unresolved_ids)
+                    tie_breaker_prompt = f"""{prompt_instructions}
+
+--- START OF RUBRIC (cobidas_rubric.csv) ---
+{rubric_content}
+--- END OF RUBRIC ---
+
+CRITICAL: Previous analyses disagreed on questions: {disputed_str}
+
+Please CAREFULLY re-evaluate ONLY these specific questions: {disputed_str}
+Take extra care to find evidence in the paper. If information is truly not present, score as 0 or N/A as appropriate.
+
+Return JSON with ONLY these questions:
+{{
+  "metadata": {{}},
+  "csv": "Question_Number,ai_score,evidence\\n..."
+}}
+"""
+                    if uploaded_file:
+                        prompt_content = [tie_breaker_prompt, uploaded_file]
+                    else:
+                        prompt_content = [f"{tie_breaker_prompt}\n\n--- PAPER TEXT ---\n{paper_text}"]
+
+                    result = generate_json_response(model, prompt_content)
+                    
+                    if result:
+                        tb_scores = parse_ai_csv_to_dict(result.get('csv', ''))
+                        
+                        # Add these votes to unresolved items
+                        for item in unresolved:
+                            q_id = item['q_id']
+                            if q_id in tb_scores:
+                                score = normalize_score(tb_scores[q_id]['ai_score'])
+                                item['votes'].append(score)
+                                if score not in item['evidences']:
+                                    item['evidences'][score] = tb_scores[q_id]['evidence']
+                        
+                        # Check if any are now resolved
+                        still_unresolved = []
+                        for item in unresolved:
+                            winner, count, is_majority = get_majority_vote(item['votes'])
+                            # Lower threshold for tie-breaker rounds (simple majority)
+                            if count >= (len(item['votes']) // 2 + 1):
+                                final_scores[item['q_id']] = {
+                                    'ai_score': winner,
+                                    'evidence': item['evidences'].get(winner, ''),
+                                    'confidence': f"{count}/{len(item['votes'])} (resolved in tie-breaker)"
+                                }
+                            else:
+                                still_unresolved.append(item)
+                        
+                        resolved_this_round = len(unresolved) - len(still_unresolved)
+                        logging.info(f"    Resolved {resolved_this_round} questions this round")
+                        unresolved = still_unresolved
+                        unresolved_ids = [u['q_id'] for u in unresolved]
+
+            # === 7. FORCE RESOLVE ANY REMAINING ===
+            if unresolved:
+                logging.warning(f"Force-resolving {len(unresolved)} questions with plurality vote...")
+                for item in unresolved:
+                    # Just take the most common vote, even if not majority
+                    counter = Counter([v for v in item['votes'] if v != 'MISSING'])
+                    if counter:
+                        winner, count = counter.most_common(1)[0]
+                    else:
+                        winner = 'N/A'
+                        count = 0
+                    
+                    final_scores[item['q_id']] = {
+                        'ai_score': winner,
+                        'evidence': item['evidences'].get(winner, 'Consensus could not be reached.'),
+                        'confidence': f"{count}/{len(item['votes'])} (forced)"
+                    }
+                    logging.warning(f"  Q{item['q_id']}: votes={item['votes']} -> {winner}")
+
+            # === 8. BUILD FINAL CSV ===
+            logging.info("Building final consensus CSV...")
+            final_csv = io.StringIO()
+            writer = csv.DictWriter(final_csv, fieldnames=['Question_Number', 'ai_score', 'evidence'])
+            writer.writeheader()
+
+            for q_id in rubric_map.keys():
+                data = final_scores.get(q_id, {'ai_score': 'N/A', 'evidence': 'Not scored.'})
+                writer.writerow({
+                    'Question_Number': q_id,
+                    'ai_score': data['ai_score'],
+                    'evidence': data['evidence']
+                })
+
+            # === 9. RECONSTRUCT & RETURN ===
+            final_result = {
+                'metadata': metadata,
+                'csv': final_csv.getvalue()
+            }
+
+            logging.info(f"=== HIGH-ACCURACY COMPLETE ===")
+            logging.info(f"Total passes: {NUM_PASSES} + up to 3 tie-breakers")
+            logging.info(f"Questions scored: {len(final_scores)}/{len(rubric_map)}")
             
-            # Final merge with majority vote
-            logging.info(f"Finalizing results from {len(all_runs)} runs...")
-            final_scores = merge_results_with_majority(all_runs, rubric_map)
-            
-            return reconstruct_full_csv(final_scores, rubric_map, metadata)
-            
+            return reconstruct_full_csv(final_result, rubric_map)
+
         except Exception as e:
-            logging.error(f"High-accuracy scoring failed: {e}", exc_info=True)
+            logging.error(f"High-Accuracy scoring failed: {e}", exc_info=True)
             raise
