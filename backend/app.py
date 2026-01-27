@@ -6,7 +6,7 @@ load_dotenv()
 from flask import Flask
 from flask_cors import CORS
 from scorer.routes import main_blueprint
-
+from scorer.routes_sse import sse_blueprint # <-- 1. ADD THIS IMPORT
 
 def create_app():
     app = Flask(__name__, static_folder='../frontend', static_url_path='/')
@@ -20,6 +20,7 @@ def create_app():
     CORS(app, resources={r"/api/*": {"origins": "*"}})
     
     app.register_blueprint(main_blueprint)
+    app.register_blueprint(sse_blueprint) # <-- 2. ADD THIS LINE TO REGISTER IT
 
     @app.route('/')
     def index():
