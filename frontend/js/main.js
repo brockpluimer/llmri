@@ -214,36 +214,81 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================================================
-    // Drag and Drop
+    // Drag and Drop (FIXED)
     // ==========================================================================
     function initDragAndDrop() {
         const zone = elements.uploadZone;
-
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(event => {
-            zone.addEventListener(event, (e) => {
+        const input = elements.fileInput;
+        
+        // Prevent default drag behaviors on the whole document
+        // This stops the browser from opening the file
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.body.addEventListener(eventName, (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-            });
+            }, false);
         });
 
-        ['dragenter', 'dragover'].forEach(event => {
-            zone.addEventListener(event, () => {
-                zone.classList.add('dragging');
-            });
-        });
+        // Handle drag enter/over on zone for visual feedback
+        zone.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            zone.classList.add('dragging');
+        }, false);
+        
+        zone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            zone.classList.add('dragging');
+        }, false);
 
-        ['dragleave', 'drop'].forEach(event => {
-            zone.addEventListener(event, () => {
+        // Handle drag leave - check if actually leaving the zone
+        zone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const rect = zone.getBoundingClientRect();
+            const x = e.clientX;
+            const y = e.clientY;
+            if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
                 zone.classList.remove('dragging');
-            });
-        });
+            }
+        }, false);
 
+        // Handle drop on zone
         zone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            zone.classList.remove('dragging');
+            
             const files = e.dataTransfer.files;
-            if (files.length > 0) {
+            if (files && files.length > 0) {
                 handleFileSelect(files[0]);
             }
-        });
+        }, false);
+        
+        // Also handle drop on the file input itself
+        input.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            zone.classList.remove('dragging');
+            
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) {
+                handleFileSelect(files[0]);
+            }
+        }, false);
+        
+        // Handle dragover/dragenter on input
+        input.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        }, false);
+        
+        input.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            zone.classList.add('dragging');
+        }, false);
     }
 
     // ==========================================================================
