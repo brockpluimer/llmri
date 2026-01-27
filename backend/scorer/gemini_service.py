@@ -36,18 +36,35 @@ def extract_text_from_pdf(pdf_path: str) -> str:
         return ""
 
 def load_rubric_map(rubric_path):
-    """Loads the rubric CSV into a dictionary for fast lookup."""
+    """
+    Loads the rubric CSV into a dictionary for fast lookup.
+    Keys are Question_Number (string).
+    """
     rubric_map = {}
     try:
-        with open(rubric_path, "r", encoding="utf-8") as f:
+        # utf-8-sig automatically handles Byte Order Marks (BOM) if present
+        with open(rubric_path, "r", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
+            
+            # Verify headers match what we expect
+            if 'Question_Number' not in reader.fieldnames:
+                logging.error(f"Rubric CSV is missing 'Question_Number'. Found: {reader.fieldnames}")
+                return {}
+
             for row in reader:
-                # normalize keys just in case
-                clean_row = {k.strip(): v.strip() for k, v in row.items()}
-                if 'Question_Number' in clean_row:
-                    rubric_map[clean_row['Question_Number']] = clean_row
+                # normalize ID to remove potential whitespace
+                q_id = row.get('Question_Number', '').strip()
+                if q_id:
+                    rubric_map[q_id] = {
+                        'Status': row.get('Status', 'Mandatory'),
+                        'Section': row.get('Section', 'Unknown Section'),
+                        'Question_Text': row.get('Question_Text', 'Unknown Question'),
+                        'Maximum_Score': row.get('Maximum_Score', '0')
+                    }
     except Exception as e:
         logging.error(f"Failed to load rubric file: {e}")
+        
+    logging.info(f"Successfully loaded {len(rubric_map)} rubric items.")
     return rubric_map
 
 def generate_with_retry(model, prompt_parts) -> dict:
@@ -63,7 +80,7 @@ def generate_with_retry(model, prompt_parts) -> dict:
 
     cleaned_text = response.text.strip()
     
-    # Clean up markdown fences if present
+    # Clean up markdown fences
     if cleaned_text.startswith("```json"):
         cleaned_text = cleaned_text[7:]
     if cleaned_text.endswith("```"):
@@ -73,46 +90,75 @@ def generate_with_retry(model, prompt_parts) -> dict:
 
 def reconstruct_full_csv(ai_json, rubric_map):
     """
-    Merges the AI's minimal output (ID, Score, Evidence) with the static rubric data
-    (Question Text, Section, etc.) to create the full CSV format the frontend expects.
+    Merges the AI's minimal output (ID, Score, Evidence) with the static rubric data.
+    This ensures the Frontend gets the full text even though the AI didn't generate it.
     """
     ai_csv_text = ai_json.get('csv', '')
     if not ai_csv_text:
+        logging.warning("AI return empty CSV string.")
         return ai_json 
 
-    # Parse the AI's minimal CSV
+    # 1. Parse the AI's minimal CSV
     ai_rows = []
     try:
         csv_file = io.StringIO(ai_csv_text)
         reader = csv.DictReader(csv_file)
         for row in reader:
              ai_rows.append(row)
-    except Exception:
-        # If parsing fails, return as is (fallback)
+    except Exception as e:
+        logging.error(f"Failed to parse AI CSV output: {e}")
         return ai_json
 
-    # Prepare output
+    # 2. Prepare full output
     output_io = io.StringIO()
-    # The columns expected by utils.py and frontend
+    # These headers must match what utils.py and the frontend expect
     headers = ['Question_Number', 'Status', 'Section', 'Question_Text', 'Maximum_Score', 'ai_score', 'evidence']
     writer = csv.DictWriter(output_io, fieldnames=headers)
     writer.writeheader()
     
+    # 3. Join AI data with Rubric data
     for ai_row in ai_rows:
-        q_num = ai_row.get('Question_Number')
-        if not q_num: continue
+        # Clean keys (handle case sensitivity or whitespace from AI)
+        clean_ai_row = {k.strip().lower(): v for k, v in ai_row.items() if k}
         
-        # Look up static data from our loaded rubric
-        static_data = rubric_map.get(q_num, {})
+        # Find Question Number (handle variations like 'question_number', 'id', 'q_no')
+        q_num = None
+        for key in clean_ai_row:
+            if 'question' in key or 'number' in key:
+                q_num = clean_ai_row[key]
+                break
         
+        # Fallback: if not found by key, maybe it's the first value
+        if not q_num and ai_row:
+            q_num = list(ai_row.values())[0]
+
+        q_num = str(q_num).strip()
+        
+        # Retrieve static data
+        static_data = rubric_map.get(q_num)
+        
+        if not static_data:
+            # If the AI hallucinated a question number not in our rubric, skip it
+            continue
+
+        # Find Score and Evidence in AI output
+        ai_score_val = 'N/A'
+        evidence_val = ''
+        
+        for k, v in clean_ai_row.items():
+            if 'score' in k and 'max' not in k:
+                ai_score_val = v
+            if 'evidence' in k:
+                evidence_val = v
+
         merged_row = {
             'Question_Number': q_num,
-            'Status': static_data.get('Status', 'Unknown'),
-            'Section': static_data.get('Section', 'Unknown'),
-            'Question_Text': static_data.get('Question_Text', 'Unknown'),
-            'Maximum_Score': static_data.get('Maximum_Score', '0'),
-            'ai_score': ai_row.get('ai_score', 'N/A'),
-            'evidence': ai_row.get('evidence', '')
+            'Status': static_data['Status'],
+            'Section': static_data['Section'],
+            'Question_Text': static_data['Question_Text'],
+            'Maximum_Score': static_data['Maximum_Score'],
+            'ai_score': ai_score_val,
+            'evidence': evidence_val
         }
         writer.writerow(merged_row)
         
@@ -138,14 +184,17 @@ def score_paper_with_gemini(paper_file) -> dict:
             
             # Load rubric map for post-processing
             rubric_map = load_rubric_map(rubric_path)
+            if not rubric_map:
+                raise ValueError("Rubric failed to load. Check CSV headers.")
 
-            # Config - Token Efficient Prompting
+            # Strict Config
             generation_config = {
                 "temperature": 0.0,
                 "top_k": 1, 
                 "response_mime_type": "application/json",
             }
 
+            # Disable Safety Filters
             safety_settings = {
                 HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
                 HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
@@ -160,7 +209,7 @@ def score_paper_with_gemini(paper_file) -> dict:
             )
 
             # --- OPTIMIZED PROMPT ---
-            # We explicitly ask for FEWER columns to save tokens and prevent truncation.
+            # We explicitly ask for specific columns to match the reconstruction logic
             full_prompt_text = f"""{prompt_instructions}
 
 --- START OF RUBRIC (cobidas_rubric.csv) ---
@@ -168,7 +217,7 @@ def score_paper_with_gemini(paper_file) -> dict:
 --- END OF RUBRIC ---
 
 IMPORTANT: Return the result strictly as JSON.
-To save space, the 'csv' string must ONLY contain 3 columns: Question_Number, ai_score, evidence.
+To save tokens, the 'csv' string must ONLY contain 3 columns: Question_Number, ai_score, evidence.
 Do NOT repeat the Question Text or Section names.
 
 Format:
@@ -182,7 +231,6 @@ Format:
 }}
 """
 
-            # --- ATTEMPT 1: PDF UPLOAD ---
             logging.info(f"Attempt 1: Analyzing {paper_file.filename} via PDF Vision...")
             result = None
             try:
@@ -190,20 +238,19 @@ Format:
                 prompt_payload = [full_prompt_text, uploaded_file]
                 result = generate_with_retry(model, prompt_payload)
             except ValueError as e:
-                logging.warning(f"Attempt 1 failed (Safety/Block). Switching to Text Fallback. Error: {e}")
+                logging.warning(f"Attempt 1 failed. Switching to Text Fallback. Error: {e}")
 
-            # --- ATTEMPT 2: TEXT FALLBACK ---
             if not result:
                 logging.info("Attempt 2: Analyzing extracted text...")
                 raw_text = extract_text_from_pdf(temp_path)
                 if not raw_text:
-                    raise ValueError("Could not extract text from PDF for fallback.")
+                    raise ValueError("Could not extract text from PDF.")
                 
+                # Truncate text if absolutely massive, though 2.5 Pro has 2M context
                 prompt_payload = [f"{full_prompt_text}\n\n--- PAPER TEXT ---\n{raw_text}"]
                 result = generate_with_retry(model, prompt_payload)
 
-            # --- POST-PROCESSING ---
-            # Rehydrate the CSV with full details (Section, Question Text) so frontend works
+            # Reconstruct full CSV for the frontend
             final_result = reconstruct_full_csv(result, rubric_map)
             
             return final_result
