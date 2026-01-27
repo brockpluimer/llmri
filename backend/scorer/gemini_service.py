@@ -5,9 +5,8 @@ import tempfile
 import json
 import csv
 import io
-import re
-from google import genai
-from google.genai import types
+import google.generativeai as genai
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from pypdf import PdfReader
 
 logging.basicConfig(
@@ -15,17 +14,14 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-# --- 1. INITIALIZE CLIENT (New V2 SDK Way) ---
+# Configure Gemini API
 try:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY environment variable not found.")
-    
-    # In V2, we create a client instance instead of using global config
-    client = genai.Client(api_key=api_key)
-    logging.info("Gemini V2 Client configured successfully.")
+    genai.configure(api_key=api_key)
 except Exception as e:
-    logging.fatal(f"FATAL ERROR: Could not configure Gemini Client. {e}")
+    logging.fatal(f"FATAL ERROR: Could not configure Gemini API. {e}")
 
 def extract_text_from_pdf(pdf_path: str) -> str:
     """Fallback method: Extracts raw text if Gemini blocks the PDF file."""
@@ -40,16 +36,23 @@ def extract_text_from_pdf(pdf_path: str) -> str:
         return ""
 
 def load_rubric_map(rubric_path):
-    """Loads the rubric CSV into a dictionary for fast lookup."""
+    """
+    Loads the rubric CSV into a dictionary for fast lookup.
+    Keys are Question_Number (string).
+    """
     rubric_map = {}
     try:
+        # utf-8-sig automatically handles Byte Order Marks (BOM) if present
         with open(rubric_path, "r", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
+            
+            # Verify headers match what we expect
             if 'Question_Number' not in reader.fieldnames:
-                logging.error("Rubric CSV missing 'Question_Number' header.")
+                logging.error(f"Rubric CSV is missing 'Question_Number'. Found: {reader.fieldnames}")
                 return {}
 
             for row in reader:
+                # normalize ID to remove potential whitespace
                 q_id = row.get('Question_Number', '').strip()
                 if q_id:
                     rubric_map[q_id] = {
@@ -60,22 +63,20 @@ def load_rubric_map(rubric_path):
                     }
     except Exception as e:
         logging.error(f"Failed to load rubric file: {e}")
+        
+    logging.info(f"Successfully loaded {len(rubric_map)} rubric items.")
     return rubric_map
 
-def generate_with_retry(model_id, contents, config) -> dict:
-    """Helper to handle API calls and parsing with V2 SDK."""
-    
-    # V2 SDK call: client.models.generate_content
-    response = client.models.generate_content(
-        model=model_id,
-        contents=contents,
-        config=config
+def generate_with_retry(model, prompt_parts) -> dict:
+    """Helper to handle API calls and parsing."""
+    response = model.generate_content(
+        prompt_parts, 
+        request_options={"timeout": 600}
     )
     
-    # Check if the response was blocked (V2 usually returns None or empty text)
-    if not response.text:
-        # In V2, safety/block reason is often in response.candidates[0].finish_reason
-        raise ValueError(f"Gemini blocked the request or returned empty text.")
+    if not response.parts:
+        feedback = response.prompt_feedback
+        raise ValueError(f"Gemini blocked the request. Reason: {feedback}")
 
     cleaned_text = response.text.strip()
     
@@ -88,44 +89,67 @@ def generate_with_retry(model_id, contents, config) -> dict:
     return json.loads(cleaned_text.strip())
 
 def reconstruct_full_csv(ai_json, rubric_map):
-    """Merges AI output with static rubric data."""
+    """
+    Merges the AI's minimal output (ID, Score, Evidence) with the static rubric data.
+    This ensures the Frontend gets the full text even though the AI didn't generate it.
+    """
     ai_csv_text = ai_json.get('csv', '')
-    if not ai_csv_text: return ai_json 
+    if not ai_csv_text:
+        logging.warning("AI return empty CSV string.")
+        return ai_json 
 
+    # 1. Parse the AI's minimal CSV
     ai_rows = []
     try:
         csv_file = io.StringIO(ai_csv_text)
         reader = csv.DictReader(csv_file)
-        for row in reader: ai_rows.append(row)
-    except Exception: return ai_json
+        for row in reader:
+             ai_rows.append(row)
+    except Exception as e:
+        logging.error(f"Failed to parse AI CSV output: {e}")
+        return ai_json
 
+    # 2. Prepare full output
     output_io = io.StringIO()
+    # These headers must match what utils.py and the frontend expect
     headers = ['Question_Number', 'Status', 'Section', 'Question_Text', 'Maximum_Score', 'ai_score', 'evidence']
     writer = csv.DictWriter(output_io, fieldnames=headers)
     writer.writeheader()
     
+    # 3. Join AI data with Rubric data
     for ai_row in ai_rows:
-        # Clean keys
+        # Clean keys (handle case sensitivity or whitespace from AI)
         clean_ai_row = {k.strip().lower(): v for k, v in ai_row.items() if k}
         
-        # Find ID
+        # Find Question Number (handle variations like 'question_number', 'id', 'q_no')
         q_num = None
         for key in clean_ai_row:
             if 'question' in key or 'number' in key:
                 q_num = clean_ai_row[key]
                 break
-        if not q_num and ai_row: q_num = list(ai_row.values())[0]
+        
+        # Fallback: if not found by key, maybe it's the first value
+        if not q_num and ai_row:
+            q_num = list(ai_row.values())[0]
+
         q_num = str(q_num).strip()
         
+        # Retrieve static data
         static_data = rubric_map.get(q_num)
-        if not static_data: continue
+        
+        if not static_data:
+            # If the AI hallucinated a question number not in our rubric, skip it
+            continue
 
-        # Find Score/Evidence
+        # Find Score and Evidence in AI output
         ai_score_val = 'N/A'
         evidence_val = ''
+        
         for k, v in clean_ai_row.items():
-            if 'score' in k and 'max' not in k: ai_score_val = v
-            if 'evidence' in k: evidence_val = v
+            if 'score' in k and 'max' not in k:
+                ai_score_val = v
+            if 'evidence' in k:
+                evidence_val = v
 
         merged_row = {
             'Question_Number': q_num,
@@ -138,15 +162,18 @@ def reconstruct_full_csv(ai_json, rubric_map):
         }
         writer.writerow(merged_row)
         
+    # Replace the short CSV in the JSON with the full Reconstructed CSV
     ai_json['csv'] = output_io.getvalue()
     return ai_json
 
 def score_paper_with_gemini(paper_file) -> dict:
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
+            # Save uploaded file
             temp_path = os.path.join(temp_dir, paper_file.filename)
             paper_file.save(temp_path)
 
+            # Load Resources
             current_dir = pathlib.Path(__file__).parent.parent
             rubric_path = current_dir / "rubrics" / "cobidas_rubric.csv"
             
@@ -155,35 +182,35 @@ def score_paper_with_gemini(paper_file) -> dict:
             with open(rubric_path, "r", encoding="utf-8") as f:
                 rubric_content = f.read()
             
+            # Load rubric map for post-processing
             rubric_map = load_rubric_map(rubric_path)
+            if not rubric_map:
+                raise ValueError("Rubric failed to load. Check CSV headers.")
 
-            # --- 2. NEW CONFIG OBJECT (With Seed Support) ---
-            conf = types.GenerateContentConfig(
-                temperature=0.0,
-                top_k=1,
-                seed=42,  # <--- Now supported in V2!
-                response_mime_type="application/json",
-                safety_settings=[
-                    types.SafetySetting(
-                        category='HARM_CATEGORY_HARASSMENT',
-                        threshold='BLOCK_NONE'
-                    ),
-                    types.SafetySetting(
-                        category='HARM_CATEGORY_HATE_SPEECH',
-                        threshold='BLOCK_NONE'
-                    ),
-                    types.SafetySetting(
-                        category='HARM_CATEGORY_SEXUALLY_EXPLICIT',
-                        threshold='BLOCK_NONE'
-                    ),
-                    types.SafetySetting(
-                        category='HARM_CATEGORY_DANGEROUS_CONTENT',
-                        threshold='BLOCK_NONE'
-                    )
-                ]
+            # Strict Config
+            generation_config = {
+                "temperature": 0.0,
+                "top_k": 1, 
+                "response_mime_type": "application/json",
+            }
+
+            # Disable Safety Filters
+            safety_settings = {
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+            }
+
+            model = genai.GenerativeModel(
+                model_name='gemini-2.5-pro',
+                generation_config=generation_config,
+                safety_settings=safety_settings
             )
 
-            prompt_text = f"""{prompt_instructions}
+            # --- OPTIMIZED PROMPT ---
+            # We explicitly ask for specific columns to match the reconstruction logic
+            full_prompt_text = f"""{prompt_instructions}
 
 --- START OF RUBRIC (cobidas_rubric.csv) ---
 {rubric_content}
@@ -204,34 +231,29 @@ Format:
 }}
 """
 
-            logging.info(f"Attempt 1: Analyzing {paper_file.filename} via PDF Vision (V2 SDK)...")
+            logging.info(f"Attempt 1: Analyzing {paper_file.filename} via PDF Vision...")
             result = None
             try:
-                # V2 SDK File Upload (handled differently, but client.models.generate_content supports paths directly!)
-                # Note: For large PDFs, we still use the file API, but for simplicity here we assume standard upload
-                # Actually, V2 handles local files gracefully if we read bytes.
-                
-                # To be safe with V2, we usually upload to File API first:
-                uploaded_file = client.files.upload(path=temp_path)
-                
-                prompt_payload = [prompt_text, uploaded_file]
-                result = generate_with_retry('gemini-2.5-pro', prompt_payload, conf) 
-                # Note: 'gemini-2.5-pro' might not be in V2 public alias yet, fallback to 2.0-flash or check docs
-                # If you have 2.5 access, ensure the model name is correct (e.g. 'gemini-2.5-pro-exp')
-                
-            except Exception as e:
+                uploaded_file = genai.upload_file(path=temp_path, mime_type='application/pdf')
+                prompt_payload = [full_prompt_text, uploaded_file]
+                result = generate_with_retry(model, prompt_payload)
+            except ValueError as e:
                 logging.warning(f"Attempt 1 failed. Switching to Text Fallback. Error: {e}")
 
             if not result:
                 logging.info("Attempt 2: Analyzing extracted text...")
                 raw_text = extract_text_from_pdf(temp_path)
-                if not raw_text: raise ValueError("Could not extract text.")
+                if not raw_text:
+                    raise ValueError("Could not extract text from PDF.")
                 
-                prompt_payload = [f"{prompt_text}\n\n--- PAPER TEXT ---\n{raw_text}"]
-                # Retry with text
-                result = generate_with_retry('gemini-2.0-flash', prompt_payload, conf)
+                # Truncate text if absolutely massive, though 2.5 Pro has 2M context
+                prompt_payload = [f"{full_prompt_text}\n\n--- PAPER TEXT ---\n{raw_text}"]
+                result = generate_with_retry(model, prompt_payload)
 
-            return reconstruct_full_csv(result, rubric_map)
+            # Reconstruct full CSV for the frontend
+            final_result = reconstruct_full_csv(result, rubric_map)
+            
+            return final_result
 
         except Exception as e:
             logging.error(f"Scoring failed: {e}", exc_info=True)
