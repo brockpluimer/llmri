@@ -9,14 +9,34 @@
     <title>LLMRI – LLM Research Methodology Inspector</title>
     
     <!-- Favicon - uses CSS to swap colors based on color scheme -->
-    <link rel="icon" href="images/llmri_logo_blue.svg" media="(prefers-color-scheme: light)">
-    <link rel="icon" href="images/llmri_logo_white.svg" media="(prefers-color-scheme: dark)">
+    <link rel="icon" type="image/svg+xml" href="images/llmri_logo_blue.svg" media="(prefers-color-scheme: light)">
+    <link rel="icon" type="image/svg+xml" href="images/llmri_logo_white.svg" media="(prefers-color-scheme: dark)">
+    <!-- Fallback for browsers that don't support media queries in link -->
+    <link rel="icon" type="image/svg+xml" href="images/llmri_logo_blue.svg">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     
     <link rel="stylesheet" href="css/style.css">
+    
+    <style>
+        /* Logo size overrides - making it more visible */
+        .logo-icon {
+            width: 48px !important;
+            height: 48px !important;
+            border-radius: 10px !important;
+        }
+        
+        .logo-img {
+            width: 40px !important;
+            height: 40px !important;
+        }
+        
+        .logo-title {
+            font-size: 22px !important;
+        }
+    </style>
 </head>
 <body>
     <div class="app">
@@ -25,8 +45,8 @@
             <div class="header-content">
                 <a href="/" class="logo">
                     <div class="logo-icon">
-                        <img src="images/llmri_logo_blue.svg" alt="LLMRI Logo" class="logo-img logo-img--light" width="32" height="32">
-                        <img src="images/llmri_logo_white.svg" alt="LLMRI Logo" class="logo-img logo-img--dark" width="32" height="32">
+                        <img src="images/llmri_logo_blue.svg" alt="LLMRI Logo" class="logo-img logo-img--light" width="40" height="40">
+                        <img src="images/llmri_logo_white.svg" alt="LLMRI Logo" class="logo-img logo-img--dark" width="40" height="40">
                     </div>
                     <div class="logo-text">
                         <span class="logo-title">LLMRI</span>
@@ -35,7 +55,7 @@
                 </a>
                 
                 <nav class="nav">
-                    <a href="https://ko-fi.com/YOUR_KOFI" target="_blank" rel="noopener noreferrer" class="nav-link nav-link--accent">
+                    <a href="https://ko-fi.com/llmri" target="_blank" rel="noopener noreferrer" class="nav-link nav-link--accent">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
                             <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
@@ -203,7 +223,7 @@
                         <line x1="12" y1="8" x2="12.01" y2="8"/>
                     </svg>
                     <span>Results may vary slightly between analyses. Limited to 1 analysis per day.</span>
-                    <a href="https://ko-fi.com/YOUR_KOFI" target="_blank" rel="noopener noreferrer" class="notice-link">
+                    <a href="https://ko-fi.com/llmri" target="_blank" rel="noopener noreferrer" class="notice-link">
                         Support us
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
