@@ -1,3 +1,10 @@
+"""
+gemini_service.py - UPDATED VERSION WITH STREAMING COMPATIBILITY
+
+This version includes compatibility functions for gemini_service_streaming.py
+while maintaining the new structure.
+"""
+
 import os
 import pathlib
 import logging
@@ -23,6 +30,7 @@ try:
 except Exception as e:
     logging.fatal(f"FATAL ERROR: Could not configure Gemini API. {e}")
 
+
 def extract_text_from_pdf(pdf_path: str) -> str:
     """Fallback method: Extracts raw text if Gemini blocks the PDF file."""
     try:
@@ -34,6 +42,7 @@ def extract_text_from_pdf(pdf_path: str) -> str:
     except Exception as e:
         logging.error(f"Failed to extract text from PDF: {e}")
         return ""
+
 
 def load_rubric_map(rubric_path):
     """
@@ -67,6 +76,29 @@ def load_rubric_map(rubric_path):
     logging.info(f"Successfully loaded {len(rubric_map)} rubric items.")
     return rubric_map
 
+
+def get_model(temperature=0.0):
+    """Initialize Gemini model with configurable temperature."""
+    generation_config = {
+        "temperature": temperature,
+        "top_k": 1 if temperature == 0.0 else 40,
+        "response_mime_type": "application/json",
+    }
+    
+    safety_settings = {
+        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+    }
+    
+    return genai.GenerativeModel(
+        model_name='gemini-2.5-pro',
+        generation_config=generation_config,
+        safety_settings=safety_settings
+    )
+
+
 def generate_with_retry(model, prompt_parts) -> dict:
     """Helper to handle API calls and parsing."""
     response = model.generate_content(
@@ -87,6 +119,7 @@ def generate_with_retry(model, prompt_parts) -> dict:
         cleaned_text = cleaned_text[:-3]
     
     return json.loads(cleaned_text.strip())
+
 
 def reconstruct_full_csv(ai_json, rubric_map):
     """
@@ -166,7 +199,57 @@ def reconstruct_full_csv(ai_json, rubric_map):
     ai_json['csv'] = output_io.getvalue()
     return ai_json
 
+
+# ==============================================================================
+# COMPATIBILITY FUNCTIONS FOR STREAMING SERVICE
+# ==============================================================================
+
+def process_pdf_for_gemini(pdf_path: str):
+    """
+    Process PDF for Gemini API.
+    Returns tuple: (uploaded_file, paper_text, error)
+    
+    This is a compatibility function for gemini_service_streaming.py
+    """
+    try:
+        # Try to upload PDF to Gemini
+        uploaded_file = genai.upload_file(path=pdf_path, mime_type='application/pdf')
+        return (uploaded_file, None, None)
+    except Exception as e:
+        logging.warning(f"PDF upload failed, falling back to text extraction: {e}")
+        # Fall back to text extraction
+        try:
+            paper_text = extract_text_from_pdf(pdf_path)
+            if not paper_text:
+                return (None, None, "Could not extract text from PDF")
+            return (None, paper_text, None)
+        except Exception as extract_error:
+            return (None, None, str(extract_error))
+
+
+def get_gemini_response(prompt_text: str, uploaded_file=None, paper_text=None):
+    """
+    Get response from Gemini API.
+    Returns the parsed JSON response.
+    
+    This is a compatibility function for gemini_service_streaming.py
+    """
+    model = get_model(temperature=0.0)
+    
+    if uploaded_file:
+        prompt_payload = [prompt_text, uploaded_file]
+    else:
+        prompt_payload = [f"{prompt_text}\n\n--- PAPER TEXT ---\n{paper_text}"]
+    
+    return generate_with_retry(model, prompt_payload)
+
+
+# ==============================================================================
+# MAIN SCORING FUNCTION
+# ==============================================================================
+
 def score_paper_with_gemini(paper_file) -> dict:
+    """Main scoring function for standard mode."""
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
             # Save uploaded file
@@ -187,29 +270,10 @@ def score_paper_with_gemini(paper_file) -> dict:
             if not rubric_map:
                 raise ValueError("Rubric failed to load. Check CSV headers.")
 
-            # Strict Config
-            generation_config = {
-                "temperature": 0.0,
-                "top_k": 1, 
-                "response_mime_type": "application/json",
-            }
-
-            # Disable Safety Filters
-            safety_settings = {
-                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-            }
-
-            model = genai.GenerativeModel(
-                model_name='gemini-2.5-pro',
-                generation_config=generation_config,
-                safety_settings=safety_settings
-            )
+            # Get model
+            model = get_model(temperature=0.0)
 
             # --- OPTIMIZED PROMPT ---
-            # We explicitly ask for specific columns to match the reconstruction logic
             full_prompt_text = f"""{prompt_instructions}
 
 --- START OF RUBRIC (cobidas_rubric.csv) ---
@@ -227,7 +291,7 @@ Format:
     "authors": "Author Names",
     "year": "2024"
   }},
-  "csv": "Question_Number,ai_score,evidence\\n1,2,\"Quote...\"\\n2,0.5,\"Evidence...\""
+  "csv": "Question_Number,ai_score,evidence\\n1,2,\\"Quote...\\"\\n2,0.5,\\"Evidence...\\"
 }}
 """
 
@@ -246,7 +310,6 @@ Format:
                 if not raw_text:
                     raise ValueError("Could not extract text from PDF.")
                 
-                # Truncate text if absolutely massive, though 2.5 Pro has 2M context
                 prompt_payload = [f"{full_prompt_text}\n\n--- PAPER TEXT ---\n{raw_text}"]
                 result = generate_with_retry(model, prompt_payload)
 
