@@ -832,9 +832,17 @@ document.addEventListener('DOMContentLoaded', () => {
             clearFile();
         });
 
-        // Form submit
+        // Form submit - prevent default and use our own validation
         elements.uploadForm.addEventListener('submit', (e) => {
             e.preventDefault();
+            e.stopPropagation();
+            
+            // Check if we have a file in state (works for both click and drag-drop)
+            if (!state.file) {
+                showError('Please select a PDF file to analyze.');
+                return;
+            }
+            
             analyzeFile();
         });
 
