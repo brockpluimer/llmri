@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="LLMRI - AI-powered methodological assessment for fMRI research papers using COBIDAS guidelines">
+    <meta name="theme-color" content="#4285F4">
+    
+    <title>LLMRI – LLM Research Methodology Inspector</title>
+    
+    <!-- Favicon - uses CSS to swap colors based on color scheme -->
+    <link rel="icon" href="images/llmri_logo_blue.svg" media="(prefers-color-scheme: light)">
+    <link rel="icon" href="images/llmri_logo_white.svg" media="(prefers-color-scheme: dark)">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <a href="/" class="logo">
+                    <div class="logo-icon">
+                        <img src="images/llmri_logo_blue.svg" alt="LLMRI Logo" class="logo-img logo-img--light" width="32" height="32">
+                        <img src="images/llmri_logo_white.svg" alt="LLMRI Logo" class="logo-img logo-img--dark" width="32" height="32">
+                    </div>
+                    <div class="logo-text">
+                        <span class="logo-title">LLMRI</span>
+                        <span class="logo-subtitle">Research Methodology Inspector</span>
+                    </div>
+                </a>
+                
+                <nav class="nav">
+                    <a href="https://ko-fi.com/YOUR_KOFI" target="_blank" rel="noopener noreferrer" class="nav-link nav-link--accent">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
+                            <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
+                            <line x1="6" y1="1" x2="6" y2="4"/>
+                            <line x1="10" y1="1" x2="10" y2="4"/>
+                            <line x1="14" y1="1" x2="14" y2="4"/>
+                        </svg>
+                        <span>Support</span>
+                    </a>
+                    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">
+                        <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="5"/>
+                            <line x1="12" y1="1" x2="12" y2="3"/>
+                            <line x1="12" y1="21" x2="12" y2="23"/>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                            <line x1="1" y1="12" x2="3" y2="12"/>
+                            <line x1="21" y1="12" x2="23" y2="12"/>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                        </svg>
+                        <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                        </svg>
+                    </button>
+                </nav>
+            </div>
+        </header>
+
+        <main class="main">
+            <!-- Hero Section (shown before results) -->
+            <section class="hero" id="hero-section">
+                <div class="hero-content">
+                    <div class="badge">
+                        <span class="badge-dot"></span>
+                        Powered by Gemini 2.5
+                    </div>
+                    
+                    <h1 class="hero-title">
+                        Evaluate Your fMRI Paper Against
+                        <span class="hero-title--accent">COBIDAS Guidelines</span>
+                    </h1>
+                    
+                    <p class="hero-description">
+                        Upload your neuroimaging research paper and receive an automated methodological 
+                        assessment based on the OHBM Committee on Best Practices in Data Analysis and 
+                        Sharing (COBIDAS) reporting standards.
+                    </p>
+                    
+                    <div class="stats">
+                        <div class="stat">
+                            <span class="stat-number">82</span>
+                            <span class="stat-label">Rubric Items</span>
+                        </div>
+                        <div class="stat-divider"></div>
+                        <div class="stat">
+                            <span class="stat-number">7</span>
+                            <span class="stat-label">Categories</span>
+                        </div>
+                        <div class="stat-divider"></div>
+                        <div class="stat">
+                            <span class="stat-number">~2m</span>
+                            <span class="stat-label">Analysis Time</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Upload Section -->
+            <section class="upload-section" id="upload-section">
+                <form class="upload-form" id="upload-form">
+                    <div class="upload-zone" id="upload-zone">
+                        <input type="file" id="paper-file" name="paper" accept=".pdf" class="upload-input" required>
+                        
+                        <div class="upload-content" id="upload-content">
+                            <div class="upload-icon">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                            </div>
+                            <p class="upload-text">
+                                <span class="upload-text--accent">Click to upload</span> or drag and drop
+                            </p>
+                            <p class="upload-hint">PDF files only (max 20MB)</p>
+                        </div>
+                        
+                        <div class="file-preview hidden" id="file-preview">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="16" y1="13" x2="8" y2="13"/>
+                                <line x1="16" y1="17" x2="8" y2="17"/>
+                                <polyline points="10 9 9 9 8 9"/>
+                            </svg>
+                            <div class="file-info">
+                                <span class="file-name" id="file-name"></span>
+                                <span class="file-size" id="file-size"></span>
+                            </div>
+                            <button type="button" class="file-remove" id="file-remove" aria-label="Remove file">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="analyze-button" id="analyze-button" disabled>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2a4 4 0 0 1 4 4v1a1 1 0 0 0 1 1h1a4 4 0 0 1 0 8h-1a1 1 0 0 0-1 1v1a4 4 0 0 1-8 0v-1a1 1 0 0 0-1-1H6a4 4 0 0 1 0-8h1a1 1 0 0 0 1-1V6a4 4 0 0 1 4-4z"/>
+                            <circle cx="12" cy="12" r="2"/>
+                        </svg>
+                        <span>Analyze Paper</span>
+                    </button>
+                </form>
+                
+                <!-- Processing Status -->
+                <div class="processing hidden" id="processing">
+                    <div class="processing-header">
+                        <div class="spinner"></div>
+                        <span class="processing-title">Analyzing your paper...</span>
+                    </div>
+                    <div class="processing-steps">
+                        <div class="step" data-step="uploading">
+                            <div class="step-dot"></div>
+                            <span class="step-label">Uploading PDF</span>
+                        </div>
+                        <div class="step" data-step="processing">
+                            <div class="step-dot"></div>
+                            <span class="step-label">Processing content</span>
+                        </div>
+                        <div class="step" data-step="analyzing">
+                            <div class="step-dot"></div>
+                            <span class="step-label">Evaluating methodology</span>
+                        </div>
+                        <div class="step" data-step="complete">
+                            <div class="step-dot"></div>
+                            <span class="step-label">Complete</span>
+                        </div>
+                    </div>
+                    <p class="processing-hint">This typically takes 1-3 minutes depending on paper length</p>
+                </div>
+                
+                <!-- Error Message -->
+                <div class="error hidden" id="error">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <div class="error-content">
+                        <h3 class="error-title">Analysis Failed</h3>
+                        <p class="error-message" id="error-message"></p>
+                    </div>
+                    <button class="error-retry" id="error-retry">Try Again</button>
+                </div>
+                
+                <!-- Rate Limit Notice -->
+                <div class="notice">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="16" x2="12" y2="12"/>
+                        <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    <span>Results may vary slightly between analyses. Limited to 1 analysis per day.</span>
+                    <a href="https://ko-fi.com/YOUR_KOFI" target="_blank" rel="noopener noreferrer" class="notice-link">
+                        Support us
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                            <polyline points="15 3 21 3 21 9"/>
+                            <line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                    </a>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section hidden" id="results-section">
+                <!-- Results Header -->
+                <div class="results-nav">
+                    <button class="back-button" id="back-button">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="19" y1="12" x2="5" y2="12"/>
+                            <polyline points="12 19 5 12 12 5"/>
+                        </svg>
+                        Analyze Another Paper
+                    </button>
+                    <div class="download-buttons">
+                        <button class="download-button" id="download-csv">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Download CSV
+                        </button>
+                        <button class="download-button download-button--secondary" id="download-report">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="16" y1="13" x2="8" y2="13"/>
+                                <line x1="16" y1="17" x2="8" y2="17"/>
+                            </svg>
+                            Download Report
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Score Overview -->
+                <div class="score-overview">
+                    <div class="total-score">
+                        <div class="score-circle">
+                            <svg class="score-ring" viewBox="0 0 160 160">
+                                <circle class="score-ring-bg" cx="80" cy="80" r="70"/>
+                                <circle class="score-ring-fill" cx="80" cy="80" r="70" id="score-ring-fill"/>
+                            </svg>
+                            <div class="score-value">
+                                <span class="score-percent" id="score-percent">0%</span>
+                                <span class="score-label">COBIDAS Score</span>
+                            </div>
+                        </div>
+                        <div class="score-details">
+                            <p class="score-raw" id="score-raw">0 / 0 points</p>
+                            <p class="score-description" id="score-description"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="section-scores">
+                        <h3 class="section-scores-title">Score by Category</h3>
+                        <div class="section-bars" id="section-bars">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detailed Results -->
+                <div class="detailed-results">
+                    <div class="results-header">
+                        <h3 class="results-title">Detailed Assessment</h3>
+                        <div class="filter-buttons">
+                            <button class="filter-button active" data-filter="all">All <span id="count-all"></span></button>
+                            <button class="filter-button" data-filter="issues">Needs Attention <span id="count-issues"></span></button>
+                            <button class="filter-button" data-filter="na">N/A <span id="count-na"></span></button>
+                        </div>
+                    </div>
+                    
+                    <div class="results-accordion" id="results-accordion">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-left">
+                    <p class="footer-text">
+                        Built by <a href="https://linkedin.com/in/brockpluimer" target="_blank" rel="noopener noreferrer">Brock Pluimer</a>
+                    </p>
+                    <p class="footer-subtext">
+                        Based on research published in <em>Neuroscience Informatics</em> (2026)
+                    </p>
+                </div>
+                <div class="footer-right">
+                    <a href="https://doi.org/10.1016/j.neuri.2026.100262" target="_blank" rel="noopener noreferrer" class="footer-link">
+                        Read the Paper
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                            <polyline points="15 3 21 3 21 9"/>
+                            <line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

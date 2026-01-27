@@ -265,11 +265,26 @@ input {
     width: 40px;
     height: 40px;
     border-radius: var(--radius-md);
-    background: var(--color-accent-dim);
-    color: var(--color-accent);
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.logo-img {
+    width: 32px;
+    height: 32px;
+}
+
+/* Light/dark logo switching */
+.logo-img--dark { display: none; }
+.logo-img--light { display: block; }
+
+[data-theme="dark"] .logo-img--dark { display: block; }
+[data-theme="dark"] .logo-img--light { display: none; }
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .logo-img--dark { display: block; }
+    :root:not([data-theme="light"]) .logo-img--light { display: none; }
 }
 
 .logo-title {
