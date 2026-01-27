@@ -8,11 +8,8 @@
     
     <title>LLMRI – LLM Research Methodology Inspector</title>
     
-    <!-- Favicon - uses CSS to swap colors based on color scheme -->
-    <link rel="icon" type="image/svg+xml" href="images/llmri_logo_blue.svg" media="(prefers-color-scheme: light)">
-    <link rel="icon" type="image/svg+xml" href="images/llmri_logo_white.svg" media="(prefers-color-scheme: dark)">
-    <!-- Fallback for browsers that don't support media queries in link -->
-    <link rel="icon" type="image/svg+xml" href="images/llmri_logo_blue.svg">
+    <!-- Favicon - always use white version (looks better on both light/dark browser tabs) -->
+    <link rel="icon" type="image/svg+xml" href="images/llmri_logo_white.svg">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,20 +18,26 @@
     <link rel="stylesheet" href="css/style.css">
     
     <style>
-        /* Logo size overrides - making it more visible */
+        /* Logo size overrides - matching full height of text block */
         .logo-icon {
-            width: 48px !important;
-            height: 48px !important;
-            border-radius: 10px !important;
+            width: 52px !important;
+            height: 52px !important;
+            border-radius: 12px !important;
+            padding: 4px !important;
         }
         
         .logo-img {
-            width: 40px !important;
-            height: 40px !important;
+            width: 44px !important;
+            height: 44px !important;
         }
         
         .logo-title {
-            font-size: 22px !important;
+            font-size: 24px !important;
+            line-height: 1.1 !important;
+        }
+        
+        .logo-subtitle {
+            font-size: 12px !important;
         }
     </style>
 </head>
@@ -45,8 +48,8 @@
             <div class="header-content">
                 <a href="/" class="logo">
                     <div class="logo-icon">
-                        <img src="images/llmri_logo_blue.svg" alt="LLMRI Logo" class="logo-img logo-img--light" width="40" height="40">
-                        <img src="images/llmri_logo_white.svg" alt="LLMRI Logo" class="logo-img logo-img--dark" width="40" height="40">
+                        <img src="images/llmri_logo_blue.svg" alt="LLMRI Logo" class="logo-img logo-img--light" width="44" height="44">
+                        <img src="images/llmri_logo_white.svg" alt="LLMRI Logo" class="logo-img logo-img--dark" width="44" height="44">
                     </div>
                     <div class="logo-text">
                         <span class="logo-title">LLMRI</span>
