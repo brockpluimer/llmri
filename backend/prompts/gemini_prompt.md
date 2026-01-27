@@ -1,8 +1,8 @@
-# LLMRI Scoring Prompt - v2
+# LLMRI Scoring Prompt - v3
 
 **Objective:** Evaluate the provided neuroimaging research paper against the COBIDAS rubric.
 
-**Your Role:** You are an expert neuroimaging methodologist. Score the paper *strictly* based on the rubric.
+**Your Role:** You are an expert neuroimaging methodologist. Score the paper *strictly* based on the rubric, but with intelligent interpretation of modern reporting practices.
 
 ---
 
@@ -54,7 +54,87 @@ Now that we've established they DID use this method:
 
 ---
 
-### Common Conditional Item Patterns
+## STANDARDIZED PIPELINE RECOGNITION (IMPORTANT!)
+
+Modern neuroimaging papers often use **standardized, well-documented preprocessing pipelines**. When a paper cites one of these pipelines with a version number, you should give credit for all steps that pipeline performs BY DEFAULT.
+
+### fMRIPrep
+
+If the paper states preprocessing was performed using **fMRIPrep** (with version number and/or citation to Esteban et al.), give **FULL CREDIT** for the following items, as fMRIPrep performs these steps automatically and documents them in its methods boilerplate:
+
+| Question | fMRIPrep Default Behavior |
+|----------|---------------------------|
+| Q18 | ✅ Coregistration method (EPI to T1w via boundary-based registration) |
+| Q19 | ✅ Coregistration cost function (BBR - boundary-based registration) |
+| Q20 | ✅ Coregistration interpolation method (documented in fMRIPrep) |
+| Q21 | ✅ Skull stripping method (via ANTs or FreeSurfer antsBrainExtraction/mri_synthstrip) |
+| Q22 | ✅ Tissue segmentation (via FreeSurfer or fast/ANTs) |
+| Q23 | ✅ Brain extraction/skull stripping (via ANTs or FreeSurfer) |
+| Q24-25 | ✅ Motion correction (via FSL MCFLIRT or FreeSurfer) |
+| Q26 | ✅ Motion correction reference frame (documented - middle volume or first) |
+| Q27 | ✅ Motion correction interpolation (documented in fMRIPrep) |
+| Q28-29 | ✅ Susceptibility distortion correction (if fieldmaps provided, via TOPUP/FUGUE/SyN) |
+| Q30-32 | ✅ Spatial normalization to MNI space (via ANTs SyN registration) |
+| Q33 | ✅ Normalization template specified (MNI152NLin2009cAsym or MNI152NLin6Asym) |
+| Q40+ | ✅ Confound variables computed (motion params, CompCor, FD, DVARS, etc.) |
+
+**Evidence format:** When giving credit based on fMRIPrep usage, cite the fMRIPrep mention. Example:
+- `"Preprocessing was performed using fMRIPrep version 23.1.0 (Esteban et al., 2019)"` → This covers tissue segmentation, brain extraction, motion correction, normalization.
+
+**Note:** Slice timing correction and smoothing are NOT defaults in fMRIPrep - only give credit if explicitly mentioned.
+
+### Other Standard Pipelines
+
+Apply similar logic to other well-documented pipelines:
+
+- **FreeSurfer:** Credit for cortical reconstruction, parcellation, tissue segmentation, surface-based analysis
+- **FSL (FEAT/MELODIC):** Credit for standard preprocessing steps if using default pipeline
+- **SPM:** Credit for standard preprocessing if using batch scripts
+- **CONN Toolbox:** Credit for connectivity-specific preprocessing and denoising
+- **C-PAC:** Credit for documented default preprocessing steps
+- **HCP Pipelines:** Credit for HCP-standard processing steps
+- **QSIPrep:** Credit for diffusion preprocessing steps (for dMRI studies)
+- **MRIQC:** Credit for quality control procedures
+
+**The Rationale:** Citing a versioned, peer-reviewed pipeline with published documentation IS good methodology reporting. It's actually MORE reproducible than a custom description because:
+1. The exact code is available
+2. The version specifies exact behavior
+3. The pipeline generates detailed methods text
+
+---
+
+## IMPLICIT DATA AVAILABILITY
+
+When scoring questions about data sharing/availability, use intelligent interpretation:
+
+### ROI Data (Q37: "Are extracted ROI data values reported or made available?")
+
+Give **FULL CREDIT** if ANY of these are true:
+- ROI values are explicitly in a table in the paper
+- ROI values are in supplementary tables
+- Paper states "source data for figures is available" AND figures contain ROI results
+- Paper states data is available in a repository AND the repository would contain ROI extractions
+- Paper provides code/scripts that would output ROI values when run on shared data
+
+**Example:** If paper says "Source data underlying Figures 2-5 are provided in Supplementary Data 1" and Figures 2-5 show ROI analysis results → The ROI data IS available → Full credit.
+
+### Statistical Maps (Q73-74: "Are unthresholded statistical maps available?")
+
+Give credit if:
+- Maps explicitly shared on NeuroVault, OSF, GitHub, etc.
+- Paper states "all neuroimaging derivatives available upon request" (half credit)
+- Paper states "data available at [repository]" where repository would include maps
+
+### Raw Data (Q75-77)
+
+Give credit if:
+- Data shared on OpenNeuro, XNAT, institutional repository
+- Data available upon request (half credit for conditional sharing)
+- BIDS-formatted data mentioned as available
+
+---
+
+## COMMON CONDITIONAL ITEM PATTERNS
 
 | Question Pattern | N/A When... | 0 When... |
 |-----------------|-------------|-----------|
@@ -62,17 +142,19 @@ Now that we've established they DID use this method:
 | "If physiological monitoring was performed..." | No mention of physiological correction | They say they did physio correction but don't give details |
 | "For diffusion MRI studies..." | Paper is not a dMRI study | It's a dMRI study but info missing |
 | "If functional connectivity was assessed..." | No connectivity analysis | They did connectivity but method unclear |
-| "If multiple comparisons correction was used..." | They explicitly state no correction | They corrected but don't specify method |
+| "If multiple comparisons correction was used..." | They explicitly state no correction OR it's descriptive only | They corrected but don't specify method |
 | "If ROI analysis was performed..." | No ROI analysis done | ROI analysis done but ROIs not defined |
+| "If smoothing was performed..." | They explicitly state no smoothing was applied | They smoothed but don't give FWHM |
 
 ---
 
-### Key Principle: Absence vs. Omission
+## KEY PRINCIPLE: Absence vs. Omission
 
 **Absence (→ N/A):** The technique/method was not part of this study
 - "Not applicable: Paper does not use diffusion imaging"
 - "Not applicable: No physiological monitoring mentioned"
 - "Not applicable: Study did not perform connectivity analysis"
+- "Not applicable: No conditional shimming procedures used"
 
 **Omission (→ 0):** The technique WAS used but details were not reported
 - "Information not found." (implies: they should have reported this but didn't)
@@ -82,6 +164,8 @@ Now that we've established they DID use this method:
 ## EVIDENCE REQUIREMENTS
 
 **For Scores > 0:** Extract a VERBATIM quote from the paper supporting your score. Use quotation marks.
+- For pipeline-based credit: Quote the pipeline mention (e.g., "Preprocessing was performed using fMRIPrep 23.1.0")
+- For implicit data availability: Quote the data statement that implies availability
 
 **For Score 0:** Write exactly: `Information not found.`
 
@@ -108,7 +192,7 @@ Do NOT include Question_Text, Section, or Status columns.
     "authors": "Smith et al.",
     "year": "2024"
   },
-  "csv": "Question_Number,ai_score,evidence\n1,2,\"Scanning was performed on a 3T Siemens Prisma...\"\n2,0,\"Information not found.\"\n43,N/A,\"Not applicable: No conditional shimming procedures mentioned.\"\n54,N/A,\"Not applicable: Study did not include diffusion MRI.\""
+  "csv": "Question_Number,ai_score,evidence\n1,2,\"Scanning was performed on a 3T Siemens Prisma...\"\n2,0,\"Information not found.\"\n22,1,\"Preprocessing was performed using fMRIPrep version 21.0.1 (Esteban et al., 2019)\" \n37,1,\"Source data underlying Figures 2-5 are provided in Supplementary Data 1\"\n43,N/A,\"Not applicable: No conditional shimming procedures mentioned.\"\n54,N/A,\"Not applicable: Study did not include diffusion MRI.\""
 }
 ```
 
@@ -116,12 +200,23 @@ Do NOT include Question_Text, Section, or Status columns.
 
 ## FINAL CHECKLIST BEFORE SCORING
 
-For each conditional item ("If...", "For...", "When..."):
-1. ☐ Did I find explicit evidence this technique was used?
-2. ☐ If NO evidence → Score N/A with reason
-3. ☐ If YES evidence → Did they describe it adequately?
-4. ☐ If described → Score appropriately with quote
-5. ☐ If not described → Score 0 with "Information not found."
+For each item, ask:
+
+1. ☐ Is this a conditional item? (starts with "If", "For", "When")
+   - If YES: Did I verify the condition applies before scoring 0?
+   
+2. ☐ Did the paper use a standardized pipeline (fMRIPrep, FreeSurfer, etc.)?
+   - If YES: Did I give credit for steps that pipeline includes?
+
+3. ☐ For data availability questions:
+   - Did I check supplementary materials statements?
+   - Did I check data availability statements?
+   - Could the data be implicitly available through stated resources?
+
+4. ☐ Is my evidence appropriate?
+   - Score > 0: Do I have a quote?
+   - Score 0: Did I write "Information not found."?
+   - Score N/A: Did I explain WHY it's not applicable?
 
 ---
 
