@@ -191,6 +191,7 @@ def score_paper_with_gemini(paper_file) -> dict:
             generation_config = {
                 "temperature": 0.0,
                 "top_k": 1, 
+                "seed": 42,
                 "response_mime_type": "application/json",
             }
 
