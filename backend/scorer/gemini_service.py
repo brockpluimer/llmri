@@ -215,7 +215,7 @@ Format:
                 uploaded_file = client.files.upload(path=temp_path)
                 
                 prompt_payload = [prompt_text, uploaded_file]
-                result = generate_with_retry('gemini-2.0-flash', prompt_payload, conf) 
+                result = generate_with_retry('gemini-2.5-pro', prompt_payload, conf) 
                 # Note: 'gemini-2.5-pro' might not be in V2 public alias yet, fallback to 2.0-flash or check docs
                 # If you have 2.5 access, ensure the model name is correct (e.g. 'gemini-2.5-pro-exp')
                 
