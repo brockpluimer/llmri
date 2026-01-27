@@ -117,9 +117,13 @@ def get_majority_vote(votes: list) -> tuple:
     return (winner, count, is_majority)
 
 
-def score_paper_high_accuracy_with_progress(paper_file, progress_callback) -> dict:
+def score_paper_high_accuracy_with_progress(file_path_or_file, progress_callback) -> dict:
     """
     High-accuracy scoring with progress callbacks.
+    
+    Args:
+        file_path_or_file: Either a file path string or FileStorage object
+        progress_callback: Function called with (event_type, data)
     
     progress_callback(event_type, data) is called throughout with:
     - 'upload': {'status': 'uploading'/'complete'}
@@ -147,17 +151,23 @@ def score_paper_high_accuracy_with_progress(paper_file, progress_callback) -> di
 
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
-            # Setup
-            temp_path = os.path.join(temp_dir, paper_file.filename)
-            
-            # Reset file pointer if it was consumed elsewhere
-            try:
-                paper_file.stream.seek(0)
-            except (AttributeError, ValueError):
-                # If seeking fails, the file might be closed or unseekable
-                pass
-            
-            paper_file.save(temp_path)
+            # Handle both file paths and file objects
+            if isinstance(file_path_or_file, str):
+                # It's already a file path - just use it
+                temp_path = file_path_or_file
+                filename = os.path.basename(file_path_or_file)
+            else:
+                # It's a file object - save it
+                filename = file_path_or_file.filename
+                temp_path = os.path.join(temp_dir, filename)
+                
+                # Reset file pointer if needed
+                try:
+                    file_path_or_file.stream.seek(0)
+                except (AttributeError, ValueError):
+                    pass
+                
+                file_path_or_file.save(temp_path)
 
             current_dir = pathlib.Path(__file__).parent.parent
             rubric_path = current_dir / "rubrics" / "cobidas_rubric.csv"

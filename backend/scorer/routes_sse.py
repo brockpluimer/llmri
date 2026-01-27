@@ -101,6 +101,22 @@ def handle_score_paper_stream():
     
     # Create progress queue
     progress_queues[request_id] = queue.Queue()
+    
+    # CRITICAL FIX: Save file to disk BEFORE starting thread
+    # This prevents "read of closed file" errors when request context closes
+    import tempfile
+    import os
+    
+    temp_dir = tempfile.mkdtemp()
+    temp_file_path = os.path.join(temp_dir, filename)
+    
+    try:
+        paper_file.stream.seek(0)
+    except (AttributeError, ValueError):
+        pass
+    
+    paper_file.save(temp_file_path)
+    logging.info(f"Saved uploaded file to: {temp_file_path}")
 
     def generate():
         try:
@@ -114,12 +130,12 @@ def handle_score_paper_stream():
                 try:
                     if mode == 'high-accuracy':
                         result_holder['result'] = score_paper_high_accuracy_with_progress(
-                            paper_file, 
+                            temp_file_path,  # Pass file path, not file object
                             lambda evt, data: send_progress(request_id, evt, data)
                         )
                     else:
                         result_holder['result'] = score_paper_with_progress(
-                            paper_file,
+                            temp_file_path,  # Pass file path, not file object
                             lambda evt, data: send_progress(request_id, evt, data)
                         )
                 except Exception as e:
@@ -127,6 +143,12 @@ def handle_score_paper_stream():
                     send_progress(request_id, 'error', {'message': str(e)})
                 finally:
                     send_progress(request_id, 'done', {})
+                    # Cleanup temp file
+                    try:
+                        os.remove(temp_file_path)
+                        os.rmdir(temp_dir)
+                    except Exception as cleanup_error:
+                        logging.warning(f"Failed to cleanup temp file: {cleanup_error}")
 
             thread = threading.Thread(target=run_analysis)
             thread.start()
