@@ -19,7 +19,7 @@ For each item (`Question_Number`) in the rubric CSV file:
     *   **Full Points (`Maximum_Score`):** Award the full `Maximum_Score` if the paper *fully and explicitly* addresses all aspects of the `Question_Text`.
     *   **Half Points (`Maximum_Score / 2`):** Award half of the `Maximum_Score` (use integer division, e.g., 1 point for a 2-point question; 0 points for a 1-point question unless *significant* partial info warrants 0.5, but aim for 0 or 1) if the paper *partially addresses* the `Question_Text` (e.g., some details provided but incomplete).
     *   **Zero Points (0):** Award 0 points if the paper *does not address* the `Question_Text` at all, or the information is grossly insufficient. This applies to Mandatory items where the required information is missing.
-    *   **N/A:** Assign `N/A` only for **Conditional** items where the condition is not met by the study (e.g., asking about dMRI processing in an fMRI-only paper).
+    *   **N/A:** Assign `N/A` only for items where the condition is not met by the study (e.g., asking about dMRI processing in an fMRI-only paper). Be mindful of scoring 0 or N/A. Ensure a 0 is given only if it is applicable but not present. Otherwise, give an N/A.
 4.  **Evidence (Assign `evidence`):**
     *   If scoring Full or Half points, **quote the exact sentence(s) or specific phrase(s)** from the **PDF Paper File** that contain the relevant information. Use quotation marks ("...") around the cited text. Ensure the quote directly supports the score given.
     *   If scoring Zero points, state: "Information not found."
