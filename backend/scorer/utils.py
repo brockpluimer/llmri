@@ -50,6 +50,37 @@ def parse_gemini_csv_to_json(csv_string: str) -> list:
         raise ValueError(f"CSV formatting error from model: {e}")
 
 
+def extract_metadata_from_response(response_data: dict) -> dict:
+    """
+    Extract metadata from Gemini API response.
+    
+    This function is used by gemini_service_streaming.py to extract
+    paper metadata (title, authors, year) from the API response.
+    
+    Args:
+        response_data: Dictionary containing response data with optional 'metadata' key
+        
+    Returns:
+        Dictionary with metadata fields (title, authors, year)
+        Returns empty dict if no metadata found
+        
+    Example:
+        Input: {"metadata": {"title": "fMRI Study", "authors": "Smith et al.", "year": "2024"}}
+        Output: {"title": "fMRI Study", "authors": "Smith et al.", "year": "2024"}
+    """
+    if not response_data:
+        return {}
+    
+    metadata = response_data.get('metadata', {})
+    
+    # Ensure we always return a dict with expected keys
+    return {
+        'title': metadata.get('title', ''),
+        'authors': metadata.get('authors', ''),
+        'year': metadata.get('year', '')
+    }
+
+
 def calculate_score_summary(results: list) -> dict:
     """
     Calculate summary statistics from scoring results.
