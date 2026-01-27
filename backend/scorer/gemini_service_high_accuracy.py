@@ -261,9 +261,16 @@ Format:
 
             # === 5. INITIAL MAJORITY VOTE ===
             logging.info("Computing initial majority vote...")
+            logging.info("=" * 60)
             
             final_scores = {}
             unresolved = []
+            
+            # Track vote distributions for logging
+            unanimous_count = 0
+            strong_majority_count = 0  # 6/7 or 5/7
+            weak_majority_count = 0    # 4/7
+            no_majority_count = 0
 
             for q_id in rubric_map.keys():
                 votes = []
@@ -277,6 +284,10 @@ Format:
                             evidences[score] = pass_scores[q_id]['evidence']
 
                 winner, count, is_majority = get_majority_vote(votes)
+                
+                # Detailed logging for each question
+                vote_dist = Counter(votes)
+                vote_str = ', '.join([f"{k}:{v}" for k, v in vote_dist.most_common()])
 
                 if is_majority:
                     final_scores[q_id] = {
@@ -284,18 +295,40 @@ Format:
                         'evidence': evidences.get(winner, ''),
                         'confidence': f"{count}/{len(votes)}"
                     }
+                    
+                    # Categorize the strength of consensus
+                    if count == len(votes):
+                        unanimous_count += 1
+                        logging.debug(f"  Q{q_id}: [{vote_str}] -> {winner} ({count}/{len(votes)}) ✓ UNANIMOUS")
+                    elif count >= 5:
+                        strong_majority_count += 1
+                        logging.debug(f"  Q{q_id}: [{vote_str}] -> {winner} ({count}/{len(votes)}) ✓ STRONG")
+                    else:
+                        weak_majority_count += 1
+                        logging.info(f"  Q{q_id}: [{vote_str}] -> {winner} ({count}/{len(votes)}) ✓ weak majority")
                 else:
+                    no_majority_count += 1
+                    logging.warning(f"  Q{q_id}: [{vote_str}] -> NO MAJORITY (best: {winner} with {count}/{len(votes)}) ⚠️")
                     unresolved.append({
                         'q_id': q_id,
                         'votes': votes,
                         'evidences': evidences
                     })
 
-            logging.info(f"Initial vote: {len(final_scores)} resolved, {len(unresolved)} unresolved")
+            logging.info("=" * 60)
+            logging.info(f"VOTE SUMMARY:")
+            logging.info(f"  Unanimous (7/7):      {unanimous_count}")
+            logging.info(f"  Strong (5-6/7):       {strong_majority_count}")
+            logging.info(f"  Weak (4/7):           {weak_majority_count}")
+            logging.info(f"  No majority (<4/7):   {no_majority_count}")
+            logging.info(f"  TOTAL RESOLVED:       {len(final_scores)}/{len(rubric_map)}")
+            logging.info(f"  NEEDS TIE-BREAKER:    {len(unresolved)}")
+            logging.info("=" * 60)
 
             # === 6. TARGETED TIE-BREAKERS FOR UNRESOLVED ===
             if unresolved:
                 logging.info(f"Running targeted tie-breakers for {len(unresolved)} questions...")
+                logging.info(f"Unresolved questions: {[u['q_id'] for u in unresolved]}")
                 
                 unresolved_ids = [u['q_id'] for u in unresolved]
                 
@@ -338,6 +371,7 @@ Return JSON with ONLY these questions:
                     
                     if result:
                         tb_scores = parse_ai_csv_to_dict(result.get('csv', ''))
+                        logging.info(f"    Tie-breaker returned {len(tb_scores)} scores")
                         
                         # Add these votes to unresolved items
                         for item in unresolved:
@@ -345,46 +379,61 @@ Return JSON with ONLY these questions:
                             if q_id in tb_scores:
                                 score = normalize_score(tb_scores[q_id]['ai_score'])
                                 item['votes'].append(score)
+                                logging.info(f"    Q{q_id}: added vote '{score}' -> now {item['votes']}")
                                 if score not in item['evidences']:
                                     item['evidences'][score] = tb_scores[q_id]['evidence']
+                            else:
+                                logging.warning(f"    Q{q_id}: NOT in tie-breaker response!")
                         
                         # Check if any are now resolved
                         still_unresolved = []
                         for item in unresolved:
                             winner, count, is_majority = get_majority_vote(item['votes'])
                             # Lower threshold for tie-breaker rounds (simple majority)
-                            if count >= (len(item['votes']) // 2 + 1):
+                            total_votes = len(item['votes'])
+                            needed = total_votes // 2 + 1
+                            
+                            if count >= needed:
                                 final_scores[item['q_id']] = {
                                     'ai_score': winner,
                                     'evidence': item['evidences'].get(winner, ''),
-                                    'confidence': f"{count}/{len(item['votes'])} (resolved in tie-breaker)"
+                                    'confidence': f"{count}/{total_votes} (resolved in tie-breaker)"
                                 }
+                                logging.info(f"    ✓ Q{item['q_id']} RESOLVED: {winner} ({count}/{total_votes})")
                             else:
                                 still_unresolved.append(item)
+                                logging.info(f"    ✗ Q{item['q_id']} still unresolved: best is {winner} ({count}/{total_votes}, need {needed})")
                         
                         resolved_this_round = len(unresolved) - len(still_unresolved)
-                        logging.info(f"    Resolved {resolved_this_round} questions this round")
+                        logging.info(f"    Round {tb_round + 1} resolved {resolved_this_round} questions")
                         unresolved = still_unresolved
                         unresolved_ids = [u['q_id'] for u in unresolved]
+                    else:
+                        logging.error(f"    Tie-breaker round {tb_round + 1} FAILED")
 
             # === 7. FORCE RESOLVE ANY REMAINING ===
             if unresolved:
-                logging.warning(f"Force-resolving {len(unresolved)} questions with plurality vote...")
+                logging.warning("=" * 60)
+                logging.warning(f"FORCE-RESOLVING {len(unresolved)} questions with plurality vote...")
                 for item in unresolved:
                     # Just take the most common vote, even if not majority
-                    counter = Counter([v for v in item['votes'] if v != 'MISSING'])
+                    valid_votes = [v for v in item['votes'] if v != 'MISSING']
+                    counter = Counter(valid_votes)
                     if counter:
                         winner, count = counter.most_common(1)[0]
                     else:
                         winner = 'N/A'
                         count = 0
                     
+                    vote_dist = ', '.join([f"{k}:{v}" for k, v in counter.most_common()])
+                    logging.warning(f"  Q{item['q_id']}: [{vote_dist}] -> FORCED to '{winner}' ({count}/{len(valid_votes)})")
+                    
                     final_scores[item['q_id']] = {
                         'ai_score': winner,
                         'evidence': item['evidences'].get(winner, 'Consensus could not be reached.'),
                         'confidence': f"{count}/{len(item['votes'])} (forced)"
                     }
-                    logging.warning(f"  Q{item['q_id']}: votes={item['votes']} -> {winner}")
+                logging.warning("=" * 60)
 
             # === 8. BUILD FINAL CSV ===
             logging.info("Building final consensus CSV...")
@@ -400,15 +449,42 @@ Return JSON with ONLY these questions:
                     'evidence': data['evidence']
                 })
 
-            # === 9. RECONSTRUCT & RETURN ===
+            # === 9. FINAL SCORE CALCULATION FOR LOGGING ===
+            total_score = 0
+            max_score = 0
+            na_count = 0
+            
+            for q_id, data in final_scores.items():
+                score_val = data['ai_score']
+                max_val = rubric_map.get(q_id, {}).get('Maximum_Score', '0')
+                
+                if score_val == 'N/A':
+                    na_count += 1
+                else:
+                    try:
+                        total_score += float(score_val)
+                        max_score += float(max_val)
+                    except ValueError:
+                        pass
+            
+            percentage = round((total_score / max_score * 100), 1) if max_score > 0 else 0
+
+            # === 10. RECONSTRUCT & RETURN ===
             final_result = {
                 'metadata': metadata,
                 'csv': final_csv.getvalue()
             }
 
+            logging.info("=" * 60)
             logging.info(f"=== HIGH-ACCURACY COMPLETE ===")
-            logging.info(f"Total passes: {NUM_PASSES} + up to 3 tie-breakers")
-            logging.info(f"Questions scored: {len(final_scores)}/{len(rubric_map)}")
+            logging.info(f"  Model: {MODEL_NAME}")
+            logging.info(f"  Main passes: {NUM_PASSES}")
+            logging.info(f"  Successful passes: {successful_passes}")
+            logging.info(f"  Tie-breaker rounds used: {3 - len([u for u in unresolved_ids]) if 'unresolved_ids' in dir() else 'N/A'}")
+            logging.info(f"  Questions scored: {len(final_scores)}/{len(rubric_map)}")
+            logging.info(f"  Questions marked N/A: {na_count}")
+            logging.info(f"  FINAL SCORE: {total_score}/{max_score} = {percentage}%")
+            logging.info("=" * 60)
             
             return reconstruct_full_csv(final_result, rubric_map)
 
