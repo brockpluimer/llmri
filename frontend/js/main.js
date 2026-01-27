@@ -62,6 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
         results: null,
         metadata: null,
         filename: null,
+        mode: 'standard',
         currentFilter: 'all'
     };
 
@@ -99,6 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 results: state.results,
                 metadata: state.metadata,
                 filename: state.filename,
+                mode: state.mode,
                 savedAt: new Date().toISOString()
             };
             try {
@@ -323,11 +325,26 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         hideError();
 
+        // Get selected mode
+        const selectedMode = document.querySelector('input[name="mode"]:checked')?.value || 'standard';
+        state.mode = selectedMode;
+        
+        // Update processing hint based on mode
+        const processingHint = document.getElementById('processing-hint');
+        if (processingHint) {
+            if (selectedMode === 'high-accuracy') {
+                processingHint.textContent = 'This typically takes 5-8 minutes with multiple analysis passes';
+            } else {
+                processingHint.textContent = 'This typically takes 1-3 minutes depending on paper length';
+            }
+        }
+
         try {
             updateProcessingStep('uploading');
 
             const formData = new FormData();
             formData.append('paper', state.file);
+            formData.append('mode', selectedMode);
 
             updateProcessingStep('processing');
 
@@ -353,6 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.results = result.data;
                 state.metadata = result.metadata || null;
                 state.filename = result.filename || state.file?.name;
+                state.mode = result.mode || selectedMode;
                 
                 // Save to localStorage
                 saveResultsToStorage();
@@ -398,6 +416,23 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.uploadSection.classList.add('hidden');
         elements.processing.classList.add('hidden');
         elements.resultsSection.classList.remove('hidden');
+
+        // Show mode badge
+        const modeBadge = document.getElementById('mode-badge');
+        if (modeBadge && state.mode) {
+            if (state.mode === 'high-accuracy') {
+                modeBadge.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                    High Accuracy Mode
+                `;
+                modeBadge.classList.remove('hidden');
+            } else {
+                modeBadge.classList.add('hidden');
+            }
+        }
 
         renderPaperInfo();
         renderScoreOverview();
@@ -884,6 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.results = savedData.results;
             state.metadata = savedData.metadata;
             state.filename = savedData.filename;
+            state.mode = savedData.mode || 'standard';
             showResults();
         }
     }

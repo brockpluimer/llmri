@@ -168,6 +168,35 @@
                         </div>
                     </div>
                     
+                    <!-- Mode Selection -->
+                    <div class="mode-selection" id="mode-selection">
+                        <label class="mode-label">Analysis Mode:</label>
+                        <div class="mode-options">
+                            <label class="mode-option">
+                                <input type="radio" name="mode" value="standard" checked>
+                                <span class="mode-option-content">
+                                    <span class="mode-option-title">Standard</span>
+                                    <span class="mode-option-desc">Single analysis pass (~2 min)</span>
+                                </span>
+                            </label>
+                            <label class="mode-option">
+                                <input type="radio" name="mode" value="high-accuracy">
+                                <span class="mode-option-content">
+                                    <span class="mode-option-title">High Accuracy</span>
+                                    <span class="mode-option-desc">Multiple passes with consensus (~5-8 min)</span>
+                                </span>
+                            </label>
+                        </div>
+                        <p class="mode-hint">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="16" x2="12" y2="12"/>
+                                <line x1="12" y1="8" x2="12.01" y2="8"/>
+                            </svg>
+                            High-accuracy mode runs the analysis 2-5 times and uses majority voting to resolve disagreements, resulting in more consistent scores.
+                        </p>
+                    </div>
+                    
                     <button type="submit" class="analyze-button" id="analyze-button" disabled>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 2a4 4 0 0 1 4 4v1a1 1 0 0 0 1 1h1a4 4 0 0 1 0 8h-1a1 1 0 0 0-1 1v1a4 4 0 0 1-8 0v-1a1 1 0 0 0-1-1H6a4 4 0 0 1 0-8h1a1 1 0 0 0 1-1V6a4 4 0 0 1 4-4z"/>
@@ -201,7 +230,7 @@
                             <span class="step-label">Complete</span>
                         </div>
                     </div>
-                    <p class="processing-hint">This typically takes 1-3 minutes depending on paper length</p>
+                    <p class="processing-hint" id="processing-hint">This typically takes 1-3 minutes depending on paper length</p>
                 </div>
                 
                 <!-- Error Message -->
@@ -241,13 +270,16 @@
             <section class="results-section hidden" id="results-section">
                 <!-- Results Header -->
                 <div class="results-nav">
-                    <button class="back-button" id="back-button">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="19" y1="12" x2="5" y2="12"/>
-                            <polyline points="12 19 5 12 12 5"/>
-                        </svg>
-                        Analyze Another Paper
-                    </button>
+                    <div class="results-nav-left">
+                        <button class="back-button" id="back-button">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="19" y1="12" x2="5" y2="12"/>
+                                <polyline points="12 19 5 12 12 5"/>
+                            </svg>
+                            Analyze Another Paper
+                        </button>
+                        <div class="mode-badge hidden" id="mode-badge"></div>
+                    </div>
                     <div class="download-buttons">
                         <button class="download-button" id="download-csv">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

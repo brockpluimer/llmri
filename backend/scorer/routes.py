@@ -5,6 +5,7 @@ from flask import Blueprint, request, jsonify
 from werkzeug.utils import secure_filename
 
 from .gemini_service import score_paper_with_gemini
+from .gemini_service_high_accuracy import score_paper_high_accuracy
 from .utils import parse_gemini_csv_to_json
 
 logging.basicConfig(level=logging.INFO)
@@ -93,7 +94,10 @@ def handle_score_paper():
     """
     Handle paper scoring requests.
     
-    Expects a multipart form with a 'paper' file field containing a PDF.
+    Expects a multipart form with:
+      - 'paper': PDF file
+      - 'mode': 'standard' (default) or 'high-accuracy'
+    
     Returns JSON with scoring results or an error message.
     """
     # Validate file presence
@@ -111,12 +115,20 @@ def handle_score_paper():
         logging.warning(f"API call failed: Invalid file type '{paper_file.filename}'.")
         return jsonify({"error": "Invalid file type. Please upload a PDF."}), 400
 
+    # Get mode from form data
+    mode = request.form.get('mode', 'standard')
+
     try:
         filename = secure_filename(paper_file.filename)
-        logging.info(f"Processing file: {filename}")
+        logging.info(f"Processing file: {filename} (mode: {mode})")
         
-        # Call Gemini API for scoring - now returns dict with metadata and csv
-        gemini_response = score_paper_with_gemini(paper_file)
+        # Route to appropriate service based on mode
+        if mode == 'high-accuracy':
+            logging.info("Using HIGH-ACCURACY mode (majority vote, 2-5 runs)")
+            gemini_response = score_paper_high_accuracy(paper_file)
+        else:
+            logging.info("Using STANDARD mode (single pass)")
+            gemini_response = score_paper_with_gemini(paper_file)
         
         # Extract metadata and CSV
         metadata = gemini_response.get('metadata', {})
@@ -125,12 +137,13 @@ def handle_score_paper():
         # Parse CSV response to JSON
         json_results = parse_gemini_csv_to_json(raw_csv)
         
-        logging.info("Successfully scored paper and parsed results.")
+        logging.info(f"Successfully scored paper and parsed results. ({len(json_results)} items)")
         return jsonify({
             "success": True, 
             "data": json_results,
             "metadata": metadata,
-            "filename": filename
+            "filename": filename,
+            "mode": mode
         })
 
     except ValueError as e:
