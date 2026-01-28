@@ -6,7 +6,7 @@ load_dotenv()
 from flask import Flask
 from flask_cors import CORS
 from scorer.routes import main_blueprint
-from scorer.routes_sse import sse_blueprint # <-- 1. ADD THIS IMPORT
+from scorer.routes_sse import sse_blueprint
 
 def create_app():
     app = Flask(__name__, static_folder='../frontend', static_url_path='/')
@@ -17,10 +17,15 @@ def create_app():
     # Configure max upload size (20MB)
     app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024
     
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    # CORS - restrict to your domain only
+    CORS(app, resources={r"/api/*": {"origins": [
+        "https://llmri.onrender.com",
+        "http://localhost:5001",
+        "http://127.0.0.1:5001"
+    ]}})
     
     app.register_blueprint(main_blueprint)
-    app.register_blueprint(sse_blueprint) # <-- 2. ADD THIS LINE TO REGISTER IT
+    app.register_blueprint(sse_blueprint)
 
     @app.route('/')
     def index():

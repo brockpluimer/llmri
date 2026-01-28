@@ -30,7 +30,7 @@ progress_queues = {}
 # Rate limiting (reuse from main routes)
 rate_limit_store = {}
 RATE_LIMIT_WINDOW = 24 * 60 * 60
-MAX_REQUESTS_PER_WINDOW = 9999
+MAX_REQUESTS_PER_WINDOW = 2
 
 
 def get_client_ip():
