@@ -1794,6 +1794,9 @@ input {
     box-shadow: inset 0 0 0 3px var(--color-bg-primary);
 }
 
+
+
+
 .mode-option:has(input[type="radio"]:checked) {
     border-color: var(--color-accent);
     background: var(--color-accent-dim);
@@ -1816,8 +1819,24 @@ input {
     transition: color var(--transition-fast);
 }
 
-.mode-option input[type="radio"]:checked ~ .mode-option-content .mode-option-title {
-    color: var(--color-accent);
+.mode-option-content::before {
+    content: '';
+    position: absolute;
+    left: -16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--color-border);
+    border-radius: 50%;
+    background: transparent;
+}
+
+/* Checked state - filled circle */
+.mode-option input[type="radio"]:checked ~ .mode-option-content::before {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    box-shadow: inset 0 0 0 3px var(--color-bg-primary);
 }
 
 .mode-option-desc {
