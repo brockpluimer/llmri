@@ -1761,7 +1761,6 @@ input {
     display: flex;
     align-items: flex-start;
     padding: 16px;
-    padding-left: 16px;
     background: var(--color-bg-primary);
     border: 2px solid var(--color-border);
     border-radius: var(--radius-md);
@@ -1780,12 +1779,22 @@ input {
     cursor: pointer;
 }
 
+/* Selected state - styles the card when radio is checked */
+.mode-option:has(input[type="radio"]:checked) {
+    border-color: var(--color-accent);
+    background: var(--color-accent-dim);
+    box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.mode-option:has(input[type="radio"]:checked) .mode-option-title {
+    color: var(--color-accent);
+}
+
 .mode-option-content {
     position: relative;
     display: flex;
     flex-direction: column;
     gap: 4px;
-    padding-left: 0px;
     flex: 1;
 }
 
