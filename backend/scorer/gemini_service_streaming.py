@@ -1,13 +1,13 @@
-# backend/scorer/gemini_service_streaming.py
 """
+gemini_service_streaming.py
+
 Standard mode scoring with SSE progress streaming.
 """
-
 import os
 import io
 import logging
-from .gemini_service import get_gemini_response, process_pdf_for_gemini
-from .utils import extract_metadata_from_response
+from .gemini_service import get_model, generate_with_retry, process_pdf_for_gemini, load_rubric_map, reconstruct_full_csv
+import pathlib
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,7 +49,6 @@ def score_paper_with_progress(file_path_or_file, progress_callback):
         # Process PDF
         paper_text, prompts = process_pdf_for_gemini(paper_file)
         
-        # Only check prompts - paper_text can be empty string when using PDF upload
         if not prompts:
             raise ValueError("Failed to process PDF or generate prompts.")
         
@@ -61,25 +60,48 @@ def score_paper_with_progress(file_path_or_file, progress_callback):
             logger.info(f"Using text extraction method. Characters: {len(paper_text)}")
             progress_callback('log', {'level': 'info', 'message': f'PDF processed via text extraction. {len(paper_text)} characters.'})
         
-        # Call Gemini API
+        # Call Gemini API - get full result with metadata
         logger.info("Calling Gemini API for standard scoring...")
         progress_callback('log', {'level': 'info', 'message': 'Analyzing paper with Gemini 2.5 Pro...'})
         
-        gemini_result_csv = get_gemini_response(prompts)
+        # Build prompt payload
+        model = get_model(temperature=0.0)
+        uploaded_file = prompts.get('uploaded_file')
+        prompt_text = prompts.get('combined_prompt')
+        extracted_text = prompts.get('paper_text')
         
-        if not gemini_result_csv:
+        if uploaded_file:
+            prompt_payload = [prompt_text, uploaded_file]
+        elif extracted_text:
+            prompt_payload = [f"{prompt_text}\n\n--- PAPER TEXT ---\n{extracted_text}"]
+        else:
+            prompt_payload = [prompt_text]
+        
+        # Get full JSON response (includes metadata)
+        result = generate_with_retry(model, prompt_payload)
+        
+        if not result:
             raise ValueError("Received an empty response from Gemini API.")
+        
+        # Extract metadata and CSV from result
+        metadata = result.get('metadata', {})
+        csv_content = result.get('csv', '')
+        
+        if not csv_content:
+            raise ValueError("Gemini response missing CSV data.")
         
         progress_callback('log', {'level': 'success', 'message': 'Analysis complete.'})
         logger.info("Standard scoring complete.")
         
-        # Extract metadata
-        metadata = extract_metadata_from_response(gemini_result_csv)
+        # Load rubric map for reconstruction
+        current_dir = pathlib.Path(__file__).parent.parent
+        rubric_path = current_dir / "rubrics" / "cobidas_rubric.csv"
+        rubric_map = load_rubric_map(rubric_path)
         
-        return {
-            "csv": gemini_result_csv,
-            "metadata": metadata
-        }
+        # Reconstruct full CSV
+        full_result = reconstruct_full_csv({'metadata': metadata, 'csv': csv_content}, rubric_map)
+        
+        return full_result
         
     except Exception as e:
         logger.error(f"Error in standard paper scoring: {e}", exc_info=True)
