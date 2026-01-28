@@ -1761,6 +1761,7 @@ input {
     display: flex;
     align-items: flex-start;
     padding: 16px;
+    padding-left: 16px;
     background: var(--color-bg-primary);
     border: 2px solid var(--color-border);
     border-radius: var(--radius-md);
