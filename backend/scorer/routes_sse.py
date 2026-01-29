@@ -81,7 +81,7 @@ def handle_score_paper_stream():
     limit_check = check_rate_limit(client_ip)
     if not limit_check['allowed']:
         return jsonify({
-            "error": "You've used your daily max, try again tomorrow! We're hoping to up our limit — consider donating. Every dollar = 20+ papers analyzed!",
+            "error": "You've used your daily max, try again tomorrow! We're hoping to up our limit soon; in the meantime, please consider donating. Every dollar = 20+ papers analyzed!",
             "rate_limited": True
         }), 429
 
