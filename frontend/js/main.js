@@ -416,7 +416,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         fetch('/api/score-paper-stream', { method: 'POST', body: formData })
             .then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                if (!res.ok) {
+                    // Parse JSON to get custom error message
+                    return res.json().then(err => {
+                        throw new Error(err.error || `HTTP ${res.status}`);
+                    });
+                }
                 const reader = res.body.getReader();
                 const decoder = new TextDecoder();
                 let buffer = '';
