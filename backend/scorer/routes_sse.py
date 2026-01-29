@@ -80,7 +80,10 @@ def handle_score_paper_stream():
     client_ip = get_client_ip()
     limit_check = check_rate_limit(client_ip)
     if not limit_check['allowed']:
-        return jsonify({"error": "Rate limit exceeded"}), 429
+        return jsonify({
+            "error": "You've used your daily max, try again tomorrow! We're hoping to up our limit — consider donating. Every dollar = 20+ papers analyzed!",
+            "rate_limited": True
+        }), 429
 
     # Validate file
     if 'paper' not in request.files:
