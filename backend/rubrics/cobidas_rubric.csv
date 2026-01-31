@@ -74,10 +74,10 @@
 73,Conditional,Statistical Modeling & Inference,"Are the evaluation metrics for discrete responses (e.g., accuracy, sensitivity, specificity) reported?",2
 74,Conditional,Statistical Modeling & Inference,"Are the evaluation metrics for continuous responses (e.g., correlation, R-squared) reported?",2
 75,Conditional,Statistical Modeling & Inference,"If RSA was performed, are the evaluation metrics reported?",2
-76,Conditional,Data Sharing,"If data are shared, is the specific material being shared (e.g., raw data, processed data, code) clearly stated?",2
-77,Conditional,Data Sharing,"If data are shared, is a URL or other specific access information provided for shared materials?",2
-78,Conditional,Data Sharing,"If data are shared, are statements regarding ethics compliance related to data sharing included?",1
-79,Conditional,Data Sharing,"If data are shared, is the format of the shared data described?",1
-80,Conditional,Reproducibility,"If essential for replication purposes, is information about the computational infrastructure used (if relevant) provided?",1
+76,Conditional,Data Sharing & Reproducibility,"If data are shared, is the specific material being shared (e.g., raw data, processed data, code) clearly stated?",2
+77,Conditional,Data Sharing & Reproducibility,"If data are shared, is a URL or other specific access information provided for shared materials?",2
+78,Conditional,Data Sharing & Reproducibility,"If data are shared, are statements regarding ethics compliance related to data sharing included?",1
+79,Conditional,Data Sharing & Reproducibility,"If data are shared, is the format of the shared data described?",1
+80,Conditional,Data Sharing & Reproducibility,"If essential for replication purposes, is information about the computational infrastructure used (if relevant) provided?",1
 81,Conditional,Preprocessing Reporting,"For ASL, are the specific preprocessing steps (e.g., quantification) described?",1
 82,Conditional,Preprocessing Reporting,"For DSC MRI, are the specific preprocessing steps (e.g., conversion to concentration) described?",1

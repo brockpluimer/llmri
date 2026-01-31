@@ -65,8 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'Preprocessing Reporting': '#ea4335',
         'Statistical Modeling & Inference': '#fbbc04',
         'Results Reporting': '#9334e6',
-        'Data Sharing': '#ff6d01',
-        'Reproducibility': '#00acc1'
+        'Data Sharing & Reproducibility': '#ff6d01' 
     };
 
     const SECTIONS_ORDER = [
@@ -75,8 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'Preprocessing Reporting',
         'Statistical Modeling & Inference',
         'Results Reporting',
-        'Data Sharing',
-        'Reproducibility'
+        'Data Sharing & Reproducibility'  
     ];
 
     // ==========================================================================
