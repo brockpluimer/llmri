@@ -9,19 +9,20 @@ import logging
 import hashlib
 from datetime import datetime, timedelta
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Try to import supabase, fall back to in-memory if not available
 try:
     from supabase import create_client, Client
     SUPABASE_AVAILABLE = True
 except ImportError:
     SUPABASE_AVAILABLE = False
-    logging.warning("Supabase not installed. Using in-memory analytics.")
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+    logger.warning("Supabase not installed. Using in-memory analytics.")
 
 # Initialize Supabase client
-supabase: Client = None
+supabase = None
+
 
 def init_supabase():
     """Initialize Supabase client."""
@@ -123,7 +124,7 @@ def get_stats() -> dict:
         
         # Get all-time totals
         all_time_result = supabase.table("llmri_analytics")\
-            .select("mode, success", count="exact")\
+            .select("mode, success")\
             .execute()
         
         all_records = all_time_result.data if all_time_result.data else []
