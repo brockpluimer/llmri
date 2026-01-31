@@ -2,14 +2,16 @@
 routes_sse.py
 
 Server-Sent Events (SSE) routes for real-time progress updates.
-Add these routes to your existing routes.py or import as a blueprint.
+Includes Supabase analytics and hidden admin endpoints.
 """
 
+import os
 import logging
 import time
 import json
 import queue
 import threading
+import tempfile
 from functools import wraps
 from flask import Blueprint, request, jsonify, Response, stream_with_context
 from werkzeug.utils import secure_filename
@@ -17,6 +19,7 @@ from werkzeug.utils import secure_filename
 from .gemini_service_streaming import score_paper_with_progress
 from .gemini_service_high_accuracy_streaming import score_paper_high_accuracy_with_progress
 from .utils import parse_gemini_csv_to_json
+from .analytics import track_analysis, get_stats, get_recent_requests
 
 logging.basicConfig(level=logging.INFO)
 
@@ -27,10 +30,13 @@ ALLOWED_EXTENSIONS = {'pdf'}
 # Store for progress queues (keyed by request ID)
 progress_queues = {}
 
-# Rate limiting (reuse from main routes)
+# Rate limiting
 rate_limit_store = {}
-RATE_LIMIT_WINDOW = 24 * 60 * 60
+RATE_LIMIT_WINDOW = 24 * 60 * 60  # 24 hours
 MAX_REQUESTS_PER_WINDOW = 2
+
+# Admin secret key (set via environment variable)
+ADMIN_SECRET = os.environ.get('LLMRI_ADMIN_SECRET', 'change-me-in-production')
 
 
 def get_client_ip():
@@ -105,11 +111,7 @@ def handle_score_paper_stream():
     # Create progress queue
     progress_queues[request_id] = queue.Queue()
     
-    # CRITICAL FIX: Save file to disk BEFORE starting thread
-    # This prevents "read of closed file" errors when request context closes
-    import tempfile
-    import os
-    
+    # Save file to disk BEFORE starting thread
     temp_dir = tempfile.mkdtemp()
     temp_file_path = os.path.join(temp_dir, filename)
     
@@ -122,6 +124,9 @@ def handle_score_paper_stream():
     logging.info(f"Saved uploaded file to: {temp_file_path}")
 
     def generate():
+        analysis_success = False
+        start_time = time.time()
+        
         try:
             # Send initial event
             yield f"data: {json.dumps({'event': 'start', 'data': {'mode': mode, 'filename': filename}})}\n\n"
@@ -133,12 +138,12 @@ def handle_score_paper_stream():
                 try:
                     if mode == 'high-accuracy':
                         result_holder['result'] = score_paper_high_accuracy_with_progress(
-                            temp_file_path,  # Pass file path, not file object
+                            temp_file_path,
                             lambda evt, data: send_progress(request_id, evt, data)
                         )
                     else:
                         result_holder['result'] = score_paper_with_progress(
-                            temp_file_path,  # Pass file path, not file object
+                            temp_file_path,
                             lambda evt, data: send_progress(request_id, evt, data)
                         )
                 except Exception as e:
@@ -174,10 +179,15 @@ def handle_score_paper_stream():
 
             thread.join()
 
+            # Calculate processing time
+            processing_time = round(time.time() - start_time, 2)
+
             # Send final result
             if result_holder['error']:
                 yield f"data: {json.dumps({'event': 'error', 'data': {'message': result_holder['error']}})}\n\n"
             elif result_holder['result']:
+                nonlocal analysis_success
+                analysis_success = True
                 metadata = result_holder['result'].get('metadata', {})
                 raw_csv = result_holder['result'].get('csv', '')
                 json_results = parse_gemini_csv_to_json(raw_csv)
@@ -185,7 +195,20 @@ def handle_score_paper_stream():
                 yield f"data: {json.dumps({'event': 'complete', 'data': {'success': True, 'results': json_results, 'metadata': metadata, 'filename': filename, 'mode': mode}})}\n\n"
 
         finally:
-            # Cleanup
+            # Track analytics to Supabase
+            processing_time = round(time.time() - start_time, 2)
+            try:
+                track_analysis(
+                    mode=mode,
+                    client_ip=client_ip,
+                    success=analysis_success,
+                    processing_time=processing_time,
+                    filename=filename
+                )
+            except Exception as e:
+                logging.error(f"Failed to track analytics: {e}")
+            
+            # Cleanup queue
             if request_id in progress_queues:
                 del progress_queues[request_id]
 
@@ -198,3 +221,60 @@ def handle_score_paper_stream():
             'X-Accel-Buffering': 'no'
         }
     )
+
+
+# =============================================================================
+# Hidden Admin Analytics Endpoints
+# =============================================================================
+
+@sse_blueprint.route('/api/admin/stats', methods=['GET'])
+def admin_stats():
+    """
+    Hidden analytics endpoint.
+    
+    Access: /api/admin/stats?key=YOUR_ADMIN_SECRET
+    """
+    provided_key = request.args.get('key', '')
+    if provided_key != ADMIN_SECRET:
+        return jsonify({"error": "Not found"}), 404
+    
+    stats = get_stats()
+    return jsonify(stats)
+
+
+@sse_blueprint.route('/api/admin/requests', methods=['GET'])
+def admin_requests():
+    """
+    View recent requests.
+    
+    Access: /api/admin/requests?key=YOUR_ADMIN_SECRET&limit=50
+    """
+    provided_key = request.args.get('key', '')
+    if provided_key != ADMIN_SECRET:
+        return jsonify({"error": "Not found"}), 404
+    
+    limit = request.args.get('limit', 50, type=int)
+    requests_list = get_recent_requests(limit)
+    return jsonify({'requests': requests_list, 'count': len(requests_list)})
+
+
+@sse_blueprint.route('/api/admin/reset-rate-limit', methods=['POST'])
+def admin_reset_rate_limit():
+    """
+    Reset rate limit for a specific IP.
+    
+    Access: POST /api/admin/reset-rate-limit?key=YOUR_ADMIN_SECRET&ip=1.2.3.4
+    """
+    provided_key = request.args.get('key', '')
+    if provided_key != ADMIN_SECRET:
+        return jsonify({"error": "Not found"}), 404
+    
+    ip_to_reset = request.args.get('ip', '')
+    if not ip_to_reset:
+        return jsonify({"error": "No IP provided"}), 400
+    
+    if ip_to_reset in rate_limit_store:
+        del rate_limit_store[ip_to_reset]
+        return jsonify({"success": True, "message": f"Rate limit reset for {ip_to_reset}"})
+    
+    return jsonify({"success": True, "message": f"No rate limit found for {ip_to_reset}"})
