@@ -101,6 +101,16 @@
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
 }
 
+[data-theme="random"] .theme-toggle .icon-sun,
+[data-theme="random"] .theme-toggle .icon-moon {
+    display: none;
+}
+
+[data-theme="random"] .theme-toggle .icon-random {
+    display: block;
+}
+
+
 /* System preference detection */
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {

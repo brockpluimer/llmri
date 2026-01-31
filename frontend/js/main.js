@@ -332,15 +332,73 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================================================
     function initTheme() {
         const saved = localStorage.getItem('llmri-theme');
-        if (saved) document.documentElement.setAttribute('data-theme', saved);
+        if (saved) {
+            document.documentElement.setAttribute('data-theme', saved);
+            if (saved === 'random') {
+                applyRandomTheme();
+            }
+        }
     }
-
     function toggleTheme() {
         const current = document.documentElement.getAttribute('data-theme');
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const newTheme = current === 'dark' ? 'light' : current === 'light' ? 'dark' : prefersDark ? 'light' : 'dark';
+        let newTheme;
+        
+        if (current === 'light') {
+            newTheme = 'dark';
+        } else if (current === 'dark') {
+            newTheme = 'random';
+            applyRandomTheme();
+        } else {
+            newTheme = 'light';
+        }
+        
         document.documentElement.setAttribute('data-theme', newTheme);
         localStorage.setItem('llmri-theme', newTheme);
+    }
+
+    function applyRandomTheme() {
+        // Generate random hue (0-360)
+        const hue1 = Math.floor(Math.random() * 360);
+        // Complementary color is 180 degrees opposite
+        const hue2 = (hue1 + 180) % 360;
+        
+        // Randomly decide which is bg and which is accent
+        const bgHue = Math.random() > 0.5 ? hue1 : hue2;
+        const accentHue = bgHue === hue1 ? hue2 : hue1;
+        
+        // Set CSS variables
+        const root = document.documentElement;
+        
+        // Background colors (light/desaturated version)
+        root.style.setProperty('--color-bg-primary', `hsl(${bgHue}, 20%, 95%)`);
+        root.style.setProperty('--color-bg-secondary', `hsl(${bgHue}, 20%, 92%)`);
+        root.style.setProperty('--color-bg-card', `hsl(${bgHue}, 25%, 98%)`);
+        root.style.setProperty('--color-bg-hover', `hsl(${bgHue}, 20%, 90%)`);
+        
+        // Text colors
+        root.style.setProperty('--color-text-primary', `hsl(${bgHue}, 30%, 15%)`);
+        root.style.setProperty('--color-text-secondary', `hsl(${bgHue}, 20%, 35%)`);
+        root.style.setProperty('--color-text-muted', `hsl(${bgHue}, 15%, 55%)`);
+        
+        // Accent colors (vibrant version)
+        root.style.setProperty('--color-accent', `hsl(${accentHue}, 70%, 50%)`);
+        root.style.setProperty('--color-accent-hover', `hsl(${accentHue}, 70%, 42%)`);
+        root.style.setProperty('--color-accent-dim', `hsl(${accentHue}, 60%, 92%)`);
+        root.style.setProperty('--color-accent-glow', `hsl(${accentHue}, 70%, 80%)`);
+        
+        // Border
+        root.style.setProperty('--color-border', `hsl(${bgHue}, 20%, 85%)`);
+    }
+
+    function clearRandomTheme() {
+        const root = document.documentElement;
+        const props = [
+            '--color-bg-primary', '--color-bg-secondary', '--color-bg-card', '--color-bg-hover',
+            '--color-text-primary', '--color-text-secondary', '--color-text-muted',
+            '--color-accent', '--color-accent-hover', '--color-accent-dim', '--color-accent-glow',
+            '--color-border'
+        ];
+        props.forEach(prop => root.style.removeProperty(prop));
     }
 
     // ==========================================================================
