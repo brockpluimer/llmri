@@ -332,13 +332,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================================================
     function initTheme() {
         const saved = localStorage.getItem('llmri-theme');
-        if (saved) {
-            document.documentElement.setAttribute('data-theme', saved);
-            if (saved === 'random') {
-                applyRandomTheme();
-            }
-        }
+        if (saved) document.documentElement.setAttribute('data-theme', saved);
     }
+
     function toggleTheme() {
         const current = document.documentElement.getAttribute('data-theme');
         let newTheme;
