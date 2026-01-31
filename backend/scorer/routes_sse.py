@@ -123,10 +123,13 @@ def handle_score_paper_stream():
     paper_file.save(temp_file_path)
     logging.info(f"Saved uploaded file to: {temp_file_path}")
 
+    # Use a mutable container to track success across nested function
+    result_tracker = {
+        'success': False,
+        'start_time': time.time()
+    }
+
     def generate():
-        analysis_success = False
-        start_time = time.time()
-        
         try:
             # Send initial event
             yield f"data: {json.dumps({'event': 'start', 'data': {'mode': mode, 'filename': filename}})}\n\n"
@@ -179,15 +182,11 @@ def handle_score_paper_stream():
 
             thread.join()
 
-            # Calculate processing time
-            processing_time = round(time.time() - start_time, 2)
-
             # Send final result
             if result_holder['error']:
                 yield f"data: {json.dumps({'event': 'error', 'data': {'message': result_holder['error']}})}\n\n"
             elif result_holder['result']:
-                nonlocal analysis_success
-                analysis_success = True
+                result_tracker['success'] = True
                 metadata = result_holder['result'].get('metadata', {})
                 raw_csv = result_holder['result'].get('csv', '')
                 json_results = parse_gemini_csv_to_json(raw_csv)
@@ -196,12 +195,12 @@ def handle_score_paper_stream():
 
         finally:
             # Track analytics to Supabase
-            processing_time = round(time.time() - start_time, 2)
+            processing_time = round(time.time() - result_tracker['start_time'], 2)
             try:
                 track_analysis(
                     mode=mode,
                     client_ip=client_ip,
-                    success=analysis_success,
+                    success=result_tracker['success'],
                     processing_time=processing_time,
                     filename=filename
                 )
