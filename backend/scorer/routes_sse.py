@@ -257,6 +257,84 @@ def admin_requests():
     return jsonify({'requests': requests_list, 'count': len(requests_list)})
 
 
+@sse_blueprint.route('/api/feedback', methods=['POST'])
+def submit_feedback():
+    """
+    Submit user feedback/issue report.
+    Stores in Supabase llmri_feedback table.
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        name = data.get('name', '').strip()
+        issue_date = data.get('issue_date', '')
+        description = data.get('description', '').strip()
+        email = data.get('email', '').strip()
+        
+        if not name or not description:
+            return jsonify({"error": "Name and description are required"}), 400
+        
+        client_ip = get_client_ip()
+        
+        # Import here to avoid circular imports
+        from .analytics import supabase, _hash_ip
+        
+        if not supabase:
+            logging.error("Supabase not available for feedback")
+            return jsonify({"error": "Feedback system temporarily unavailable"}), 503
+        
+        feedback_data = {
+            "name": name[:100],  # Limit length
+            "issue_date": issue_date if issue_date else None,
+            "description": description[:2000],  # Limit length
+            "email": email[:255] if email else None,
+            "ip_hash": _hash_ip(client_ip)
+        }
+        
+        supabase.table("llmri_feedback").insert(feedback_data).execute()
+        
+        logging.info(f"Feedback submitted by {name}")
+        return jsonify({"success": True, "message": "Thank you for your feedback!"})
+        
+    except Exception as e:
+        logging.error(f"Failed to submit feedback: {e}")
+        return jsonify({"error": "Failed to submit feedback"}), 500
+
+
+@sse_blueprint.route('/api/admin/feedback', methods=['GET'])
+def admin_feedback():
+    """
+    View submitted feedback.
+    
+    Access: /api/admin/feedback?key=YOUR_ADMIN_SECRET
+    """
+    provided_key = request.args.get('key', '')
+    if provided_key != ADMIN_SECRET:
+        return jsonify({"error": "Not found"}), 404
+    
+    from .analytics import supabase
+    
+    if not supabase:
+        return jsonify({"error": "Supabase not configured"}), 503
+    
+    try:
+        result = supabase.table("llmri_feedback")\
+            .select("*")\
+            .order("created_at", desc=True)\
+            .limit(100)\
+            .execute()
+        
+        return jsonify({
+            "feedback": result.data if result.data else [],
+            "count": len(result.data) if result.data else 0
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @sse_blueprint.route('/api/admin/reset-rate-limit', methods=['POST'])
 def admin_reset_rate_limit():
     """

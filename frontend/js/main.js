@@ -750,3 +750,91 @@ document.addEventListener('DOMContentLoaded', () => {
 
     init();
 });
+
+// ============================================
+// ADD THIS TO main.js
+// Inside the DOMContentLoaded event listener, 
+// add this code at the end (before the closing });
+// ============================================
+
+    // ==========================================================================
+    // Feedback Modal
+    // ==========================================================================
+    const feedbackModal = document.getElementById('feedback-modal');
+    const feedbackForm = document.getElementById('feedback-form');
+    const feedbackSuccess = document.getElementById('feedback-success');
+    const helpButton = document.getElementById('help-button');
+    const feedbackClose = document.getElementById('feedback-close');
+
+    // Open modal
+    helpButton?.addEventListener('click', () => {
+        feedbackModal.classList.remove('hidden');
+        feedbackForm.classList.remove('hidden');
+        feedbackSuccess.classList.add('hidden');
+        feedbackForm.reset();
+        // Set default date to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('feedback-date').value = today;
+    });
+
+    // Close modal
+    feedbackClose?.addEventListener('click', () => {
+        feedbackModal.classList.add('hidden');
+    });
+
+    // Close on overlay click
+    feedbackModal?.addEventListener('click', (e) => {
+        if (e.target === feedbackModal) {
+            feedbackModal.classList.add('hidden');
+        }
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && feedbackModal && !feedbackModal.classList.contains('hidden')) {
+            feedbackModal.classList.add('hidden');
+        }
+    });
+
+    // Submit feedback
+    feedbackForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const submitBtn = document.getElementById('feedback-submit');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>Submitting...</span>';
+        
+        const data = {
+            name: document.getElementById('feedback-name').value,
+            email: document.getElementById('feedback-email').value,
+            issue_date: document.getElementById('feedback-date').value,
+            description: document.getElementById('feedback-description').value
+        };
+        
+        try {
+            const response = await fetch('/api/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                feedbackForm.classList.add('hidden');
+                feedbackSuccess.classList.remove('hidden');
+                
+                // Auto-close after 3 seconds
+                setTimeout(() => {
+                    feedbackModal.classList.add('hidden');
+                }, 3000);
+            } else {
+                alert(result.error || 'Failed to submit feedback. Please try again.');
+            }
+        } catch (error) {
+            alert('Failed to submit feedback. Please try again.');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span>Submit Feedback</span>';
+        }
+    });
