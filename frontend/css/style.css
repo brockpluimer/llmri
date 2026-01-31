@@ -369,12 +369,17 @@ input {
     text-align: center;
     padding: var(--space-3xl) 0 var(--space-2xl);
 }
-
 .hero-content {
     max-width: 680px;
     margin: 0 auto;
 }
-
+.badge-container {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: var(--space-lg);
+}
 .badge {
     display: inline-flex;
     align-items: center;
@@ -387,7 +392,15 @@ input {
     font-family: var(--font-mono);
     font-size: 12px;
     font-weight: 500;
-    margin-bottom: var(--space-lg);
+    margin-bottom: 0;  /* Removed - container handles spacing now */
+}
+.badge--link {
+    text-decoration: none;
+    transition: all var(--transition-fast);
+}
+.badge--link:hover {
+    background: var(--color-bg-hover);
+    transform: translateY(-1px);
 }
 
 .badge-dot {
