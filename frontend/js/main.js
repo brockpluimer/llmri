@@ -332,20 +332,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================================================
     function initTheme() {
         const saved = localStorage.getItem('llmri-theme');
-        if (saved) document.documentElement.setAttribute('data-theme', saved);
+        if (saved) {
+            document.documentElement.setAttribute('data-theme', saved);
+            if (saved === 'random') {
+                applyRandomTheme();
+            }
+        }
     }
 
     function toggleTheme() {
         const current = document.documentElement.getAttribute('data-theme');
         let newTheme;
         
+        // Always clear random theme styles first
+        clearRandomTheme();
+        
         if (current === 'light') {
             newTheme = 'dark';
         } else if (current === 'dark') {
             newTheme = 'random';
             applyRandomTheme();
-        } else {
+        } else if (current === 'random') {
             newTheme = 'light';
+        } else {
+            // Default case (no theme set)
+            newTheme = 'dark';
         }
         
         document.documentElement.setAttribute('data-theme', newTheme);
@@ -358,32 +369,52 @@ document.addEventListener('DOMContentLoaded', () => {
         // Complementary color is 180 degrees opposite
         const hue2 = (hue1 + 180) % 360;
         
-        // Randomly decide which is bg and which is accent
-        const bgHue = Math.random() > 0.5 ? hue1 : hue2;
-        const accentHue = bgHue === hue1 ? hue2 : hue1;
+        // Decide if we want a dark or light base (random)
+        const isDark = Math.random() > 0.5;
         
-        // Set CSS variables
+        // Pick which hue is background vs accent
+        const bgHue = hue1;
+        const accentHue = hue2;
+        
         const root = document.documentElement;
         
-        // Background colors (light/desaturated version)
-        root.style.setProperty('--color-bg-primary', `hsl(${bgHue}, 20%, 95%)`);
-        root.style.setProperty('--color-bg-secondary', `hsl(${bgHue}, 20%, 92%)`);
-        root.style.setProperty('--color-bg-card', `hsl(${bgHue}, 25%, 98%)`);
-        root.style.setProperty('--color-bg-hover', `hsl(${bgHue}, 20%, 90%)`);
-        
-        // Text colors
-        root.style.setProperty('--color-text-primary', `hsl(${bgHue}, 30%, 15%)`);
-        root.style.setProperty('--color-text-secondary', `hsl(${bgHue}, 20%, 35%)`);
-        root.style.setProperty('--color-text-muted', `hsl(${bgHue}, 15%, 55%)`);
-        
-        // Accent colors (vibrant version)
-        root.style.setProperty('--color-accent', `hsl(${accentHue}, 70%, 50%)`);
-        root.style.setProperty('--color-accent-hover', `hsl(${accentHue}, 70%, 42%)`);
-        root.style.setProperty('--color-accent-dim', `hsl(${accentHue}, 60%, 92%)`);
-        root.style.setProperty('--color-accent-glow', `hsl(${accentHue}, 70%, 80%)`);
-        
-        // Border
-        root.style.setProperty('--color-border', `hsl(${bgHue}, 20%, 85%)`);
+        if (isDark) {
+            // Dark theme variant
+            root.style.setProperty('--color-bg-primary', `hsl(${bgHue}, 30%, 8%)`);
+            root.style.setProperty('--color-bg-secondary', `hsl(${bgHue}, 25%, 12%)`);
+            root.style.setProperty('--color-bg-card', `hsl(${bgHue}, 25%, 14%)`);
+            root.style.setProperty('--color-bg-hover', `hsl(${bgHue}, 25%, 18%)`);
+            
+            root.style.setProperty('--color-text-primary', `hsl(${bgHue}, 20%, 92%)`);
+            root.style.setProperty('--color-text-secondary', `hsl(${bgHue}, 15%, 75%)`);
+            root.style.setProperty('--color-text-muted', `hsl(${bgHue}, 10%, 55%)`);
+            
+            root.style.setProperty('--color-border', `hsl(${bgHue}, 20%, 22%)`);
+            
+            // Vibrant accent
+            root.style.setProperty('--color-accent', `hsl(${accentHue}, 85%, 60%)`);
+            root.style.setProperty('--color-accent-hover', `hsl(${accentHue}, 85%, 52%)`);
+            root.style.setProperty('--color-accent-dim', `hsl(${accentHue}, 50%, 18%)`);
+            root.style.setProperty('--color-accent-glow', `hsl(${accentHue}, 70%, 35%)`);
+        } else {
+            // Light theme variant
+            root.style.setProperty('--color-bg-primary', `hsl(${bgHue}, 25%, 96%)`);
+            root.style.setProperty('--color-bg-secondary', `hsl(${bgHue}, 20%, 92%)`);
+            root.style.setProperty('--color-bg-card', `hsl(${bgHue}, 30%, 99%)`);
+            root.style.setProperty('--color-bg-hover', `hsl(${bgHue}, 25%, 90%)`);
+            
+            root.style.setProperty('--color-text-primary', `hsl(${bgHue}, 40%, 12%)`);
+            root.style.setProperty('--color-text-secondary', `hsl(${bgHue}, 25%, 35%)`);
+            root.style.setProperty('--color-text-muted', `hsl(${bgHue}, 15%, 55%)`);
+            
+            root.style.setProperty('--color-border', `hsl(${bgHue}, 20%, 85%)`);
+            
+            // Vibrant accent
+            root.style.setProperty('--color-accent', `hsl(${accentHue}, 75%, 45%)`);
+            root.style.setProperty('--color-accent-hover', `hsl(${accentHue}, 75%, 38%)`);
+            root.style.setProperty('--color-accent-dim', `hsl(${accentHue}, 60%, 92%)`);
+            root.style.setProperty('--color-accent-glow', `hsl(${accentHue}, 65%, 80%)`);
+        }
     }
 
     function clearRandomTheme() {
@@ -469,7 +500,6 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch('/api/score-paper-stream', { method: 'POST', body: formData })
             .then(res => {
                 if (!res.ok) {
-                    // Parse JSON to get custom error message
                     return res.json().then(err => {
                         throw new Error(err.error || `HTTP ${res.status}`);
                     });
@@ -729,14 +759,91 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.metadata.authors) authors = state.metadata.authors + (state.metadata.year ? ` (${state.metadata.year})` : ''); 
         }
         
-        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>LLMRI Report - ${escapeHtml(title)}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,sans-serif;max-width:900px;margin:0 auto;padding:40px 20px;background:#f8f9fa;color:#202124}.header{background:linear-gradient(135deg,#4285F4,#5e9eff);color:#fff;padding:40px;border-radius:12px;margin-bottom:30px}.header h1{font-size:24px;margin-bottom:8px}.score-card{background:#fff;padding:30px;border-radius:12px;margin-bottom:20px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.1)}.score-big{font-size:64px;font-weight:700;color:${percentage >= 60 ? '#34a853' : percentage >= 40 ? '#fbbc04' : '#ea4335'}}.section{background:#fff;padding:20px;border-radius:12px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.1)}.section-title{font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e8eaed;display:flex;align-items:center;gap:12px}.section-dot{width:12px;height:12px;border-radius:50%}.item{padding:16px 0;border-bottom:1px solid #f1f3f4}.item:last-child{border-bottom:none}.item-header{display:flex;justify-content:space-between;margin-bottom:8px}.item-score{padding:4px 12px;border-radius:4px;font-size:12px;font-weight:600}.score-full{background:#e6f4ea;color:#34a853}.score-partial{background:#fef7e0;color:#f9ab00}.score-zero{background:#fce8e6;color:#ea4335}.score-na{background:#f1f3f4;color:#80868b}.evidence{font-size:13px;color:#5f6368;font-style:italic;margin-top:8px;padding:12px;background:#f8f9fa;border-radius:6px}.footer{text-align:center;margin-top:40px;color:#80868b;font-size:12px}</style></head><body><div class="header"><h1>LLMRI Report</h1>${title !== fn ? `<div style="font-size:18px;opacity:.95">${escapeHtml(title)}</div>` : ''}${authors ? `<div style="font-size:14px;opacity:.85">${escapeHtml(authors)}</div>` : ''}<p style="opacity:.9;margin-top:12px">${escapeHtml(fn)} • ${new Date().toLocaleDateString()}${state.mode === 'high-accuracy' ? ' • High Accuracy' : ''}</p></div><div class="score-card"><div class="score-big">${percentage}%</div><p style="color:#5f6368;margin-top:8px">COBIDAS Compliance</p><p style="color:#5f6368">${totalScore.toFixed(1)} / ${maxScore} points</p></div>${SECTIONS_ORDER.map(s => { 
-            const items = state.results.filter(r => r.Section === s); 
-            if (!items.length) return ''; 
-            return `<div class="section"><div class="section-title"><span class="section-dot" style="background:${SECTION_COLORS[s]}"></span>${s}</div>${items.map(i => { 
-                const cls = i.ai_score === 'N/A' ? 'score-na' : parseFloat(i.ai_score) === parseFloat(i.Maximum_Score) ? 'score-full' : parseFloat(i.ai_score) === 0 ? 'score-zero' : 'score-partial'; 
-                return `<div class="item"><div class="item-header"><span>Q${i.Question_Number}: ${escapeHtml(i.Question_Text)}</span><span class="item-score ${cls}">${i.ai_score === 'N/A' ? 'N/A' : `${i.ai_score}/${i.Maximum_Score}`}</span></div><div class="evidence">${escapeHtml(i.evidence || 'No evidence.')}</div></div>`; 
-            }).join('')}</div>`; 
-        }).join('')}<div class="footer">Generated by LLMRI • Gemini 2.5 Pro • COBIDAS</div></body></html>`;
+        // Count N/A items for the note
+        const naCount = state.results.filter(r => r.ai_score === 'N/A').length;
+        const totalQuestions = state.results.length;
+        const scoredQuestions = totalQuestions - naCount;
+        
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>LLMRI Report - ${escapeHtml(title)}</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:900px;margin:0 auto;padding:40px 20px;background:#f8f9fa;color:#202124}
+        .header{background:linear-gradient(135deg,#4285F4,#5e9eff);color:#fff;padding:40px;border-radius:12px;margin-bottom:30px}
+        .header h1{font-size:24px;margin-bottom:8px}
+        .score-card{background:#fff;padding:30px;border-radius:12px;margin-bottom:20px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+        .score-big{font-size:64px;font-weight:700;color:${percentage >= 60 ? '#34a853' : percentage >= 40 ? '#fbbc04' : '#ea4335'}}
+        .score-details{color:#5f6368;margin-top:8px}
+        .score-note{font-size:12px;color:#80868b;margin-top:16px;font-style:italic;padding:12px;background:#f8f9fa;border-radius:6px}
+        .section{background:#fff;padding:20px;border-radius:12px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+        .section-title{font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e8eaed;display:flex;align-items:center;gap:12px}
+        .section-dot{width:12px;height:12px;border-radius:50%}
+        .item{padding:16px 0;border-bottom:1px solid #f1f3f4}
+        .item:last-child{border-bottom:none}
+        .item-header{display:flex;justify-content:space-between;margin-bottom:8px;gap:12px}
+        .item-question{flex:1}
+        .item-score{padding:4px 12px;border-radius:4px;font-size:12px;font-weight:600;white-space:nowrap}
+        .score-full{background:#e6f4ea;color:#34a853}
+        .score-partial{background:#fef7e0;color:#f9ab00}
+        .score-zero{background:#fce8e6;color:#ea4335}
+        .score-na{background:#f1f3f4;color:#80868b}
+        .evidence{font-size:13px;color:#5f6368;font-style:italic;margin-top:8px;padding:12px;background:#f8f9fa;border-radius:6px}
+        .footer{text-align:center;margin-top:40px;color:#80868b;font-size:12px}
+        .footer a{color:#4285F4}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>LLMRI Report</h1>
+        ${title !== fn ? `<div style="font-size:18px;opacity:.95">${escapeHtml(title)}</div>` : ''}
+        ${authors ? `<div style="font-size:14px;opacity:.85;margin-top:4px">${escapeHtml(authors)}</div>` : ''}
+        <p style="opacity:.9;margin-top:12px">${escapeHtml(fn)} • ${new Date().toLocaleDateString()}${state.mode === 'high-accuracy' ? ' • High Accuracy Mode' : ''}</p>
+    </div>
+    
+    <div class="score-card">
+        <div class="score-big">${percentage}%</div>
+        <p class="score-details">COBIDAS Compliance Score</p>
+        <p class="score-details">${totalScore.toFixed(1)} / ${maxScore} points</p>
+        <p class="score-note">
+            <strong>Note:</strong> Score is based on ${scoredQuestions} applicable criteria. 
+            ${naCount} criteria were marked N/A (not applicable to this study type), 
+            so the denominator may vary between papers depending on methodology used.
+        </p>
+    </div>
+    
+    ${SECTIONS_ORDER.map(s => { 
+        const items = state.results.filter(r => r.Section === s); 
+        if (!items.length) return ''; 
+        return `
+    <div class="section">
+        <div class="section-title">
+            <span class="section-dot" style="background:${SECTION_COLORS[s]}"></span>
+            ${s}
+        </div>
+        ${items.map(i => { 
+            const cls = i.ai_score === 'N/A' ? 'score-na' : parseFloat(i.ai_score) === parseFloat(i.Maximum_Score) ? 'score-full' : parseFloat(i.ai_score) === 0 ? 'score-zero' : 'score-partial'; 
+            return `
+        <div class="item">
+            <div class="item-header">
+                <span class="item-question">Q${i.Question_Number}: ${escapeHtml(i.Question_Text)}</span>
+                <span class="item-score ${cls}">${i.ai_score === 'N/A' ? 'N/A' : `${i.ai_score}/${i.Maximum_Score}`}</span>
+            </div>
+            <div class="evidence">${escapeHtml(i.evidence || 'No evidence provided.')}</div>
+        </div>`; 
+        }).join('')}
+    </div>`; 
+    }).join('')}
+    
+    <div class="footer">
+        <p>Generated by <a href="https://llmri.onrender.com" target="_blank">LLMRI</a> • Powered by Gemini 2.5 Pro</p>
+        <p style="margin-top:8px">Based on COBIDAS Guidelines • ${new Date().toISOString().split('T')[0]}</p>
+        <p style="margin-top:8px">Questions? <a href="mailto:nopainlab.uci@gmail.com">nopainlab.uci@gmail.com</a></p>
+    </div>
+</body>
+</html>`;
         
         const blob = new Blob([html], { type: 'text/html' });
         const a = document.createElement('a'); 
@@ -784,6 +891,75 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================================================
+    // Feedback Modal
+    // ==========================================================================
+    const feedbackModal = document.getElementById('feedback-modal');
+    const feedbackForm = document.getElementById('feedback-form');
+    const feedbackSuccess = document.getElementById('feedback-success');
+    const helpButton = document.getElementById('help-button');
+    const feedbackClose = document.getElementById('feedback-close');
+
+    helpButton?.addEventListener('click', () => {
+        feedbackModal.classList.remove('hidden');
+        feedbackForm.classList.remove('hidden');
+        feedbackSuccess.classList.add('hidden');
+        feedbackForm.reset();
+        document.getElementById('feedback-date').value = new Date().toISOString().split('T')[0];
+    });
+
+    feedbackClose?.addEventListener('click', () => {
+        feedbackModal.classList.add('hidden');
+    });
+
+    feedbackModal?.addEventListener('click', (e) => {
+        if (e.target === feedbackModal) {
+            feedbackModal.classList.add('hidden');
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && feedbackModal && !feedbackModal.classList.contains('hidden')) {
+            feedbackModal.classList.add('hidden');
+        }
+    });
+
+    feedbackForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = document.getElementById('feedback-submit');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>Submitting...</span>';
+        
+        const data = {
+            name: document.getElementById('feedback-name').value,
+            email: document.getElementById('feedback-email').value,
+            issue_date: document.getElementById('feedback-date').value,
+            description: document.getElementById('feedback-description').value
+        };
+        
+        try {
+            const response = await fetch('/api/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+            
+            if (response.ok) {
+                feedbackForm.classList.add('hidden');
+                feedbackSuccess.classList.remove('hidden');
+                setTimeout(() => feedbackModal.classList.add('hidden'), 3000);
+            } else {
+                alert(result.error || 'Failed to submit feedback.');
+            }
+        } catch (error) {
+            alert('Failed to submit feedback.');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span>Submit Feedback</span>';
+        }
+    });
+
+    // ==========================================================================
     // Init
     // ==========================================================================
     function init() {
@@ -802,91 +978,3 @@ document.addEventListener('DOMContentLoaded', () => {
 
     init();
 });
-
-// ============================================
-// ADD THIS TO main.js
-// Inside the DOMContentLoaded event listener, 
-// add this code at the end (before the closing });
-// ============================================
-
-    // ==========================================================================
-    // Feedback Modal
-    // ==========================================================================
-    const feedbackModal = document.getElementById('feedback-modal');
-    const feedbackForm = document.getElementById('feedback-form');
-    const feedbackSuccess = document.getElementById('feedback-success');
-    const helpButton = document.getElementById('help-button');
-    const feedbackClose = document.getElementById('feedback-close');
-
-    // Open modal
-    helpButton?.addEventListener('click', () => {
-        feedbackModal.classList.remove('hidden');
-        feedbackForm.classList.remove('hidden');
-        feedbackSuccess.classList.add('hidden');
-        feedbackForm.reset();
-        // Set default date to today
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('feedback-date').value = today;
-    });
-
-    // Close modal
-    feedbackClose?.addEventListener('click', () => {
-        feedbackModal.classList.add('hidden');
-    });
-
-    // Close on overlay click
-    feedbackModal?.addEventListener('click', (e) => {
-        if (e.target === feedbackModal) {
-            feedbackModal.classList.add('hidden');
-        }
-    });
-
-    // Close on Escape key
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && feedbackModal && !feedbackModal.classList.contains('hidden')) {
-            feedbackModal.classList.add('hidden');
-        }
-    });
-
-    // Submit feedback
-    feedbackForm?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const submitBtn = document.getElementById('feedback-submit');
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span>Submitting...</span>';
-        
-        const data = {
-            name: document.getElementById('feedback-name').value,
-            email: document.getElementById('feedback-email').value,
-            issue_date: document.getElementById('feedback-date').value,
-            description: document.getElementById('feedback-description').value
-        };
-        
-        try {
-            const response = await fetch('/api/feedback', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            
-            const result = await response.json();
-            
-            if (response.ok) {
-                feedbackForm.classList.add('hidden');
-                feedbackSuccess.classList.remove('hidden');
-                
-                // Auto-close after 3 seconds
-                setTimeout(() => {
-                    feedbackModal.classList.add('hidden');
-                }, 3000);
-            } else {
-                alert(result.error || 'Failed to submit feedback. Please try again.');
-            }
-        } catch (error) {
-            alert('Failed to submit feedback. Please try again.');
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '<span>Submit Feedback</span>';
-        }
-    });
