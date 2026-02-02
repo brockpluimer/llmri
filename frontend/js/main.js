@@ -342,21 +342,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function toggleTheme() {
         const current = document.documentElement.getAttribute('data-theme');
-        let newTheme;
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         
         // Always clear random theme styles first
         clearRandomTheme();
         
-        if (current === 'light') {
-            newTheme = 'dark';
+        let newTheme;
+        
+        if (!current || current === '') {
+            // No theme set yet - user is on system default
+            // Go to the opposite of their system preference
+            newTheme = prefersDark ? 'light' : 'dark';
+        } else if (current === 'light') {
+            // Light → Random if system is dark, otherwise Light → Dark
+            newTheme = prefersDark ? 'random' : 'dark';
         } else if (current === 'dark') {
-            newTheme = 'random';
-            applyRandomTheme();
+            // Dark → Random if system is light, otherwise Dark → Light
+            newTheme = prefersDark ? 'light' : 'random';
         } else if (current === 'random') {
-            newTheme = 'light';
-        } else {
-            // Default case (no theme set)
-            newTheme = 'dark';
+            // Random → back to system default (remove theme attribute)
+            newTheme = prefersDark ? 'dark' : 'light';
+        }
+        
+        if (newTheme === 'random') {
+            applyRandomTheme();
         }
         
         document.documentElement.setAttribute('data-theme', newTheme);
@@ -415,6 +424,14 @@ document.addEventListener('DOMContentLoaded', () => {
             root.style.setProperty('--color-accent-dim', `hsl(${accentHue}, 60%, 92%)`);
             root.style.setProperty('--color-accent-glow', `hsl(${accentHue}, 65%, 80%)`);
         }
+
+        const logoImgs = document.querySelectorAll('.logo-img');
+        logoImgs.forEach(img => {
+            // Convert accent hue to a CSS filter
+            // This rotates the hue of the blue logo to match the accent
+            const hueRotate = accentHue - 210; // 210 is roughly the hue of the original blue logo
+            img.style.filter = `brightness(0) saturate(100%) invert(1) sepia(1) saturate(5) hue-rotate(${hueRotate}deg)`;
+        });
     }
 
     function clearRandomTheme() {
@@ -426,6 +443,12 @@ document.addEventListener('DOMContentLoaded', () => {
             '--color-border'
         ];
         props.forEach(prop => root.style.removeProperty(prop));
+        
+        // Reset logo filters
+        const logoImgs = document.querySelectorAll('.logo-img');
+        logoImgs.forEach(img => {
+            img.style.filter = '';
+        });
     }
 
     // ==========================================================================
