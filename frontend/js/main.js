@@ -427,10 +427,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const logoImgs = document.querySelectorAll('.logo-img');
         logoImgs.forEach(img => {
-            // Convert accent hue to a CSS filter
-            // This rotates the hue of the blue logo to match the accent
             const hueRotate = accentHue - 210; // 210 is roughly the hue of the original blue logo
-            img.style.filter = `brightness(0) saturate(100%) invert(1) sepia(1) saturate(5) hue-rotate(${hueRotate}deg)`;
+            if (isDark) {
+                // Light/bright logo for dark backgrounds
+                img.style.filter = `brightness(0) saturate(100%) invert(1) sepia(1) saturate(5) hue-rotate(${hueRotate}deg)`;
+            } else {
+                // Dark logo for light backgrounds (no invert)
+                img.style.filter = `brightness(0) saturate(100%) sepia(1) saturate(5) hue-rotate(${hueRotate}deg)`;
+            }
         });
     }
 
