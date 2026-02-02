@@ -351,15 +351,22 @@ input {
     color: var(--color-text-primary);
 }
 
+/* Theme toggle icons */
 .icon-sun { display: block; }
 .icon-moon { display: none; }
+.icon-palette { display: none; }
 
 [data-theme="dark"] .icon-sun { display: none; }
 [data-theme="dark"] .icon-moon { display: block; }
+[data-theme="dark"] .icon-palette { display: none; }
+
+[data-theme="random"] .icon-sun { display: none; }
+[data-theme="random"] .icon-moon { display: none; }
+[data-theme="random"] .icon-palette { display: block; }
 
 @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .icon-sun { display: none; }
-    :root:not([data-theme="light"]) .icon-moon { display: block; }
+    :root:not([data-theme="light"]):not([data-theme="random"]) .icon-sun { display: none; }
+    :root:not([data-theme="light"]):not([data-theme="random"]) .icon-moon { display: block; }
 }
 
 /* --------------------------------------------------------------------------
