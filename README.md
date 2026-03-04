@@ -1,4 +1,4 @@
-# LLMRI – LLM Research Methodology Inspector
+# LLMRI
 
 AI-powered methodological assessment for fMRI research papers using COBIDAS guidelines.
 
