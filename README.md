@@ -156,7 +156,7 @@ MAX_REQUESTS_PER_WINDOW = 1
 
 ### API Costs
 
-Gemini 2.5 Flash is very cost-effective:
+Gemini 2.5 Pro is very cost-effective:
 - Input: ~$0.075 per 1M tokens
 - Output: ~$0.30 per 1M tokens
 
