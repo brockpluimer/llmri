@@ -8,7 +8,7 @@ LLMRI allows researchers to upload their neuroimaging papers and receive an auto
 
 **Features:**
 - 📄 PDF upload with drag-and-drop support
-- 🧠 Powered by Gemini 2.5 Flash
+- 🧠 Powered by Gemini 2.5
 - 📊 Visual score breakdown by COBIDAS section
 - 📥 Downloadable CSV and HTML reports
 - 🔒 Rate-limited (1 analysis/day per user)
