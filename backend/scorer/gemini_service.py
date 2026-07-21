@@ -11,8 +11,8 @@ import tempfile
 import json
 import csv
 import io
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from google import genai
+from google.genai import types
 from pypdf import PdfReader
 
 logging.basicConfig(
@@ -20,13 +20,24 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-# Configure Gemini API
+MODEL_NAME = 'gemini-3.1-pro-preview'
+
+# Safety settings: disable all blocking (scientific papers can trip filters).
+SAFETY_SETTINGS = [
+    types.SafetySetting(category='HARM_CATEGORY_HARASSMENT', threshold='BLOCK_NONE'),
+    types.SafetySetting(category='HARM_CATEGORY_HATE_SPEECH', threshold='BLOCK_NONE'),
+    types.SafetySetting(category='HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold='BLOCK_NONE'),
+    types.SafetySetting(category='HARM_CATEGORY_DANGEROUS_CONTENT', threshold='BLOCK_NONE'),
+]
+
+# Configure Gemini client
 try:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY environment variable not found.")
-    genai.configure(api_key=api_key)
+    client = genai.Client(api_key=api_key)
 except Exception as e:
+    client = None
     logging.fatal(f"FATAL ERROR: Could not configure Gemini API. {e}")
 
 
@@ -74,39 +85,28 @@ def load_rubric_map(rubric_path):
 
 
 def get_model(temperature=0.0):
-    """Initialize Gemini model with configurable temperature."""
-    generation_config = {
-        "temperature": temperature,
-        "top_k": 1 if temperature == 0.0 else 40,
-        "response_mime_type": "application/json",
-    }
-    
-    safety_settings = {
-        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-    }
-    
-    return genai.GenerativeModel(
-        model_name='gemini-2.5-pro',
-        generation_config=generation_config,
-        safety_settings=safety_settings
+    """Build the GenerateContentConfig for a request at the given temperature."""
+    return types.GenerateContentConfig(
+        temperature=temperature,
+        top_k=1 if temperature == 0.0 else 40,
+        response_mime_type="application/json",
+        safety_settings=SAFETY_SETTINGS,
+        http_options=types.HttpOptions(timeout=600_000),
     )
 
 
-def generate_with_retry(model, prompt_parts) -> dict:
+def generate_with_retry(config, prompt_parts) -> dict:
     """Helper to handle API calls and parsing."""
-    response = model.generate_content(
-        prompt_parts, 
-        request_options={"timeout": 600}
+    response = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=prompt_parts,
+        config=config,
     )
-    
-    if not response.parts:
-        feedback = response.prompt_feedback
-        raise ValueError(f"Gemini blocked the request. Reason: {feedback}")
 
-    cleaned_text = response.text.strip()
+    if not response.candidates:
+        raise ValueError(f"Gemini blocked the request. Reason: {response.prompt_feedback}")
+
+    cleaned_text = (response.text or "").strip()
     
     # Clean up markdown fences
     if cleaned_text.startswith("```json"):
@@ -224,7 +224,7 @@ def process_pdf_for_gemini(paper_file):
             uploaded_file = None
             
             try:
-                uploaded_file = genai.upload_file(path=temp_path, mime_type='application/pdf')
+                uploaded_file = client.files.upload(file=temp_path, config=types.UploadFileConfig(mime_type='application/pdf'))
                 logging.info("PDF uploaded to Gemini successfully")
             except Exception as e:
                 logging.warning(f"PDF upload failed, extracting text: {e}")
@@ -374,7 +374,7 @@ Format:
             
             # Try PDF upload
             try:
-                uploaded_file = genai.upload_file(path=temp_path, mime_type='application/pdf')
+                uploaded_file = client.files.upload(file=temp_path, config=types.UploadFileConfig(mime_type='application/pdf'))
                 prompt_payload = [full_prompt_text, uploaded_file]
                 result = generate_with_retry(model, prompt_payload)
             except ValueError as e:

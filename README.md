@@ -24,7 +24,7 @@ This tool implements the methodology from:
 
 - **Backend:** Python 3.11+, Flask
 - **Frontend:** Vanilla HTML/CSS/JS
-- **AI:** Google Gemini 2.5 Flash API
+- **AI:** Google Gemini 3.1 Pro API (via the google-genai SDK)
 - **Hosting:** Render (recommended) or any Python-compatible host
 
 ## Project Structure

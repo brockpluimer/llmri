@@ -62,7 +62,7 @@ def score_paper_with_progress(file_path_or_file, progress_callback):
         
         # Call Gemini API - get full result with metadata
         logger.info("Calling Gemini API for standard scoring...")
-        progress_callback('log', {'level': 'info', 'message': 'Analyzing paper with Gemini 2.5 Pro...'})
+        progress_callback('log', {'level': 'info', 'message': 'Analyzing paper with Gemini 3.1 Pro...'})
         
         # Build prompt payload
         model = get_model(temperature=0.0)

@@ -3,7 +3,7 @@ gemini_service_high_accuracy.py
 
 ULTRA HIGH-ACCURACY MODE
 - 7 independent passes with varied temperatures (0.0, 0.05, 0.1, 0.15, 0.1, 0.05, 0.0)
-- Gemini 2.5 Pro for maximum accuracy
+- Gemini 3.1 Pro for maximum accuracy
 - Strict majority voting (need 4/7 agreement)
 - For any remaining ties, runs targeted tie-breakers until resolved
 
@@ -18,11 +18,16 @@ import json
 import csv
 import io
 from collections import Counter
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from google.genai import types
 
 # Reuse logic from main service
-from .gemini_service import load_rubric_map, reconstruct_full_csv, extract_text_from_pdf
+from .gemini_service import (
+    load_rubric_map,
+    reconstruct_full_csv,
+    extract_text_from_pdf,
+    client,
+    SAFETY_SETTINGS,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,43 +38,32 @@ logging.basicConfig(
 NUM_PASSES = 7
 TEMPERATURES = [0.0, 0.05, 0.1, 0.15, 0.1, 0.05, 0.0]  # Symmetric, peaks at middle
 MAJORITY_THRESHOLD = 4  # Need 4/7 to agree
-MODEL_NAME = 'gemini-2.5-pro'
+MODEL_NAME = 'gemini-3.1-pro-preview'
 
 
 def get_model(temperature: float):
-    """Create model with specific temperature."""
-    generation_config = {
-        "temperature": temperature,
-        "top_k": 40 if temperature > 0 else 1,
-        "response_mime_type": "application/json",
-    }
-
-    safety_settings = {
-        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-    }
-
-    return genai.GenerativeModel(
-        model_name=MODEL_NAME,
-        generation_config=generation_config,
-        safety_settings=safety_settings
+    """Build the GenerateContentConfig for a request at the given temperature."""
+    return types.GenerateContentConfig(
+        temperature=temperature,
+        top_k=40 if temperature > 0 else 1,
+        response_mime_type="application/json",
+        safety_settings=SAFETY_SETTINGS,
+        http_options=types.HttpOptions(timeout=600_000),
     )
 
 
-def generate_json_response(model, prompt_parts):
+def generate_json_response(config, prompt_parts):
     """Executes a single model run and returns parsed JSON."""
     try:
-        response = model.generate_content(
-            prompt_parts,
-            request_options={"timeout": 600}
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt_parts,
+            config=config,
         )
-        if not response.parts:
-            feedback = response.prompt_feedback
-            raise ValueError(f"Empty response (Safety Block): {feedback}")
+        if not response.candidates:
+            raise ValueError(f"Empty response (Safety Block): {response.prompt_feedback}")
 
-        cleaned = response.text.strip()
+        cleaned = (response.text or "").strip()
         if cleaned.startswith("```json"):
             cleaned = cleaned[7:]
         if cleaned.endswith("```"):
@@ -225,7 +219,7 @@ Format:
             paper_text = None
 
             try:
-                uploaded_file = genai.upload_file(path=temp_path, mime_type='application/pdf')
+                uploaded_file = client.files.upload(file=temp_path, config=types.UploadFileConfig(mime_type='application/pdf'))
                 logging.info("PDF uploaded successfully")
             except Exception as e:
                 logging.warning(f"PDF upload failed ({e}), using text extraction")

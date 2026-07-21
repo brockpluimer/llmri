@@ -12,10 +12,15 @@ import json
 import csv
 import io
 from collections import Counter
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from google.genai import types
 
-from .gemini_service import load_rubric_map, reconstruct_full_csv, extract_text_from_pdf
+from .gemini_service import (
+    load_rubric_map,
+    reconstruct_full_csv,
+    extract_text_from_pdf,
+    client,
+    SAFETY_SETTINGS,
+)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -23,34 +28,29 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 NUM_PASSES = 7
 TEMPERATURES = [0.0, 0.05, 0.1, 0.15, 0.1, 0.05, 0.0]
 MAJORITY_THRESHOLD = 4
-MODEL_NAME = 'gemini-2.5-pro'
+MODEL_NAME = 'gemini-3.1-pro-preview'
 
 
 def get_model(temperature: float):
-    generation_config = {
-        "temperature": temperature,
-        "top_k": 40 if temperature > 0 else 1,
-        "response_mime_type": "application/json",
-    }
-    safety_settings = {
-        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-    }
-    return genai.GenerativeModel(
-        model_name=MODEL_NAME,
-        generation_config=generation_config,
-        safety_settings=safety_settings
+    return types.GenerateContentConfig(
+        temperature=temperature,
+        top_k=40 if temperature > 0 else 1,
+        response_mime_type="application/json",
+        safety_settings=SAFETY_SETTINGS,
+        http_options=types.HttpOptions(timeout=600_000),
     )
 
 
-def generate_json_response(model, prompt_parts):
+def generate_json_response(config, prompt_parts):
     try:
-        response = model.generate_content(prompt_parts, request_options={"timeout": 600})
-        if not response.parts:
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt_parts,
+            config=config,
+        )
+        if not response.candidates:
             raise ValueError(f"Empty response: {response.prompt_feedback}")
-        cleaned = response.text.strip()
+        cleaned = (response.text or "").strip()
         if cleaned.startswith("```json"):
             cleaned = cleaned[7:]
         if cleaned.endswith("```"):
@@ -208,7 +208,7 @@ Format:
             uploaded_file = None
             paper_text = None
             try:
-                uploaded_file = genai.upload_file(path=temp_path, mime_type='application/pdf')
+                uploaded_file = client.files.upload(file=temp_path, config=types.UploadFileConfig(mime_type='application/pdf'))
                 log("PDF uploaded successfully")
                 emit('upload', {'status': 'complete', 'method': 'pdf'})
             except Exception as e:
