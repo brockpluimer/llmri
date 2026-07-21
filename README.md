@@ -2,7 +2,7 @@
 
 AI-powered methodological assessment for fMRI research papers using COBIDAS guidelines.
 
-## Overview
+# Overview
 
 LLMRI allows researchers to upload their neuroimaging papers and receive an automated assessment based on the OHBM Committee on Best Practices in Data Analysis and Sharing (COBIDAS) reporting standards. The tool uses Google's Gemini 2.5 to evaluate 82 rubric items across 7 categories.
 
